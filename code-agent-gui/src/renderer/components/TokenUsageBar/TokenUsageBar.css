@@ -1,0 +1,168 @@
+.token-usage-bar {
+    padding: 12px 20px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.usage-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.usage-icon {
+    font-size: 14px;
+}
+
+.usage-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.usage-numbers {
+    margin-left: auto;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+}
+
+.usage-numbers .separator {
+    color: var(--text-muted);
+    margin: 0 4px;
+}
+
+.usage-numbers .context-limit {
+    color: var(--text-muted);
+}
+
+.usage-numbers .usage-percent {
+    margin-left: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+/* Progress bar */
+.usage-progress-container {
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.usage-progress-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Details */
+.usage-details {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+}
+
+.usage-detail {
+    display: flex;
+    gap: 6px;
+}
+
+.detail-label {
+    color: var(--text-muted);
+}
+
+.detail-value {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-secondary);
+}
+
+.step-usage {
+    margin-left: auto;
+}
+
+.step-usage .detail-value {
+    color: var(--accent);
+}
+
+/* Messages toggle and viewer */
+.messages-toggle-btn {
+    margin-left: auto;
+    padding: 2px 8px;
+    font-size: 11px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.messages-toggle-btn:hover {
+    background: var(--bg-hover);
+}
+
+.messages-viewer {
+    margin-top: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+}
+
+.message-item {
+    border-bottom: 1px solid var(--border);
+}
+
+.message-item:last-child {
+    border-bottom: none;
+}
+
+.message-item summary {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    gap: 8px;
+}
+
+.message-item summary:hover {
+    background: var(--bg-hover);
+}
+
+.msg-index {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.msg-role {
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.message-system .msg-role {
+    color: var(--warning);
+}
+
+.message-user .msg-role {
+    color: var(--accent);
+}
+
+.message-assistant .msg-role {
+    color: var(--success);
+}
+
+.msg-content {
+    padding: 8px 10px 8px 28px;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--bg-secondary);
+}

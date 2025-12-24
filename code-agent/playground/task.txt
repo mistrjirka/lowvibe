@@ -1,0 +1,84 @@
+In the folder you are in, there is a program dna_manufacturing.py that solves the problem of finding minimum cost and fewest units to produce target DNA sequence. It works fine but it is too slow, I know that there is a better solution by using dynamic programming. Keep the dna_manufacturing.py as reference and make a new one in whcihc you try to implement the dynamic programming solution. The original task was:
+
+ Genetic Engineering PAL
+A group of scientists is testing a new method for creating DNA sequences. This method allows them to take basic units, which are collections of simple DNA sequences, modify each unit by deleting selected nucleotides, and concatenate the resulting sequences into a single DNA strand. For example, consider three types of basic units: ACC, AGCTA, and CCGGTT. The DNA sequence ACACAGCAGCCGT can be created using two basic units of the first type, two of the second type, and one of the third type as follows:
+ACC ACC AGCTA AGCTA CCGGTT
+where the deleted nucleotides are highlighted in red. Each basic unit maintains its original left-to-right nucleotide order, meaning that the leftmost nucleotide of a basic unit can only be connected to the rightmost nucleotide of another unit. Additionally, it is not sufficient to produce a DNA sequence that is merely a mirror image of the desired sequence.
+Each basic unit must be pre-manufactured, incurring a cost represented by a positive integer. Additionally, each nucleotide deletion increases the cost by 1. The total manufacturing cost of using several modified basic units is the sum of their costs (concatenation itself does not increase the cost). For example, if the manufacturing costs of ACC, AGCTA, and CCGGTT are 2, 3, and 4, respectively, then the cost of creating ACACAGCAGCCGT as described above is: (2+1) + (2+1) + (3+1) + (3+4) + (4+2) = 23.
+Nucleotide deletions impact the stability of basic units. For this reason, there is a limit on the number of deletions allowed per basic unit, which is the same for all unit types. In the example above, we assume that the maximum number of deletions allowed per basic unit is at least 4.
+The Task
+
+Let Σ = {A, G, C, T} be the alphabet of nucleotides. Given a DNA sequence represented by a non-empty string T over Σ, types of available basic units represented by a set of non-empty strings {S1, ..., Sk}, where each Si ∈ Σ+ has a manufacturing cost ci, and a limit Dmax on the number of deletions that can be performed on any basic unit, find a manufacturing plan to produce T with the minimum possible manufacturing cost. Among all cost-minimal manufacturing plans, select the one that requires the fewest basic units. The number of used basic units refers to the number of concatenated DNA pieces, not the number of different types used in production. An unlimited quantity of each basic unit type is available.
+Input
+
+The first input line contains a non-empty string T over Σ, representing the DNA sequence to be created. The second line contains two integers, N and Dmax, separated by a space. N is the number of basic unit types, and Dmax is the maximum number of nucleotide deletions allowed per basic unit. Next, there are 2N input lines. Each odd-numbered line contains a positive integer representing the manufacturing cost of a basic unit type, and the following even-numbered line contains a non-empty string over Σ representing the corresponding basic unit sequence.
+Constraints:
+
+    1 ≤ |T| ≤ 20000
+    1 ≤ N ≤ 80
+    1 ≤ Dmax ≤ 40
+    Each basic unit type has a length of at most 100 and a cost of at most 500
+
+Output
+
+The output consists of a single line containing two integers, P and U, separated by a space. P is the minimum manufacturing cost to produce T, and U is the minimum number of basic units needed to achieve this cost. It is guaranteed that a feasible solution always exists.
+
+
+Example 1
+Input
+
+ACACAGCAGCCGT
+3 4
+2
+ACC
+3
+AGCTA
+4
+CCGGTT
+
+Output
+
+23 5
+
+Example 2
+Input
+
+CACCATCACCATACCCTT
+4 1
+10
+CACCCTT
+10
+CGTAGTG
+14
+CACCCAT
+20
+CACACAT
+
+Output
+
+41 3
+
+An optimal solution is: CACCCAT CACCCAT CACCCTT
+Example 3
+Input
+
+CCGTCTTCCCTTGAACTCCGTCCCCCG
+6 2
+2
+TTC
+5
+CCCG
+6
+GAAT
+14
+GAAC
+4
+CCT
+3
+CGT
+
+Output
+
+46 11
+
+An optimal solution is: CCCG TTC TTC CCT TTC GAAT TTC TTC CGT CCT CCCG 

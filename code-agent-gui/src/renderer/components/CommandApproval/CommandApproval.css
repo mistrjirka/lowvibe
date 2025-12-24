@@ -1,0 +1,99 @@
+.command-approval {
+    background: linear-gradient(135deg, rgba(210, 153, 34, 0.15), rgba(210, 153, 34, 0.05));
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin: 12px 0;
+}
+
+.command-approval-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.approval-icon {
+    font-size: 18px;
+}
+
+.approval-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--warning);
+}
+
+/* Command Preview */
+.command-preview {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.command-text {
+    display: block;
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    word-break: break-all;
+    margin-bottom: 8px;
+}
+
+.command-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.command-type strong {
+    color: var(--accent);
+}
+
+.command-cwd {
+    font-style: italic;
+}
+
+/* Approval Actions */
+.approval-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.approval-actions .btn {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+    font-size: 12px;
+    padding: 8px 12px;
+}
+
+/* Button variants */
+.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+.btn-success:hover {
+    background: #46c364;
+}
+
+.btn-warning {
+    background: var(--warning);
+    color: #1a1a1a;
+}
+
+.btn-warning:hover {
+    background: #e0a82e;
+}
+
+.btn-danger {
+    background: var(--error);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #ff6b63;
+}

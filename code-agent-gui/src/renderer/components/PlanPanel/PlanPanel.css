@@ -1,0 +1,132 @@
+.plan-panel {
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.plan-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.plan-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.plan-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.plan-icon {
+    font-size: 16px;
+}
+
+.plan-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.plan-progress {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.plan-chevron {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Plan Content */
+.plan-content {
+    padding: 0 20px 16px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.plan-restatement {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(88, 166, 255, 0.1), rgba(88, 166, 255, 0.05));
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--accent);
+    margin-bottom: 16px;
+}
+
+.plan-restatement strong {
+    color: var(--text-primary);
+}
+
+/* Todo List */
+.plan-todos {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.todo-item {
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    margin-bottom: 8px;
+    border-left: 3px solid var(--text-muted);
+}
+
+.todo-item.todo-done {
+    border-left-color: var(--success);
+    opacity: 0.7;
+}
+
+.todo-item.todo-done .todo-title {
+    text-decoration: line-through;
+}
+
+.todo-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.todo-checkbox {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.todo-item.todo-done .todo-checkbox {
+    color: var(--success);
+}
+
+.todo-title {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.todo-details {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 8px 24px;
+}
+
+.todo-criteria {
+    margin: 0 0 0 24px;
+    padding-left: 16px;
+    list-style-type: disc;
+}
+
+.todo-criteria li {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}

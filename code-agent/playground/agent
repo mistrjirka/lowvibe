@@ -1,0 +1,20 @@
+#!/bin/bash
+# Wrapper to run the code-agent against the current directory (playground)
+
+# Get the directory where this script is located
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$DIR/.."
+
+# Path to the compiled CLI
+CLI_PATH="$PROJECT_ROOT/dist/cli.js"
+
+# Check if node is installed
+if ! command -v node &> /dev/null; then
+    echo "Error: node is not installed."
+    exit 1
+fi
+
+# Run the agent
+# Defaults: --root to current dir ($PWD)
+# Passes all arguments to the CLI
+node "$CLI_PATH" --root "$PWD" "$@"

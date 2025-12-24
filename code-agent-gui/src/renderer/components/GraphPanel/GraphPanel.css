@@ -1,0 +1,192 @@
+.graph-panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Legend */
+.graph-legend {
+    display: flex;
+    gap: 16px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.legend-dot.pending {
+    background: var(--bg-hover);
+    border: 2px solid var(--text-muted);
+}
+
+.legend-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(88, 166, 255, 0.5);
+}
+
+.legend-dot.completed {
+    background: var(--success);
+}
+
+/* Graph Container */
+.graph-container {
+    flex: 1;
+    padding: 20px;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.graph-empty {
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.graph-empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+}
+
+/* Pipeline Graph SVG */
+.pipeline-graph {
+    width: 100%;
+    height: 100%;
+    min-height: 400px;
+}
+
+/* Dagre-d3 node styling (applied via D3) */
+.pipeline-graph .node rect {
+    rx: 8;
+    ry: 8;
+    stroke-width: 2;
+}
+
+.pipeline-graph .node.pending rect {
+    fill: var(--bg-tertiary);
+    stroke: var(--text-muted);
+}
+
+.pipeline-graph .node.active rect {
+    fill: var(--accent);
+    stroke: var(--accent);
+    filter: drop-shadow(0 0 12px rgba(88, 166, 255, 0.6));
+    animation: nodePulse 1.5s ease-in-out infinite;
+}
+
+.pipeline-graph .node.completed rect {
+    fill: var(--success);
+    stroke: var(--success);
+}
+
+.pipeline-graph .node text {
+    fill: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.pipeline-graph .edgePath path {
+    stroke: var(--text-muted);
+    stroke-width: 2;
+    fill: none;
+}
+
+.pipeline-graph .edgePath marker path {
+    fill: var(--text-muted);
+}
+
+@keyframes nodePulse {
+
+    0%,
+    100% {
+        filter: drop-shadow(0 0 12px rgba(88, 166, 255, 0.6));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 20px rgba(88, 166, 255, 0.9));
+    }
+}
+
+/* Current Node Info */
+.current-node-info {
+    padding: 12px 20px;
+    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent) 0%, #1f6feb 100%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.current-node-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.current-node-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+}
+
+/* Node Details Popover */
+.node-popover {
+    position: absolute;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    min-width: 280px;
+    max-width: 400px;
+    z-index: 100;
+}
+
+.node-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.node-popover-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.node-popover-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    line-height: 1;
+}
+
+.node-popover-messages {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.node-popover-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px 0;
+}

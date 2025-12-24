@@ -1,0 +1,24 @@
+{
+  "name": "code-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@types/node": "^25.0.3",
+    "@types/yargs": "^17.0.35",
+    "dotenv": "^17.2.3",
+    "openai": "^6.15.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "yargs": "^18.0.0",
+    "zod": "^4.2.1",
+    "zod-to-json-schema": "^3.25.0"
+  }
+}
