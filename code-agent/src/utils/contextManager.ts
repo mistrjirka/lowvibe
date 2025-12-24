@@ -19,7 +19,7 @@ export interface ContextManagerConfig {
 
 const DEFAULT_CONFIG: ContextManagerConfig = {
     maxToolCalls: 5,
-    summarizationThreshold: 0.85,
+    summarizationThreshold: 0.65,
     recentMessagesToKeep: 10
 };
 

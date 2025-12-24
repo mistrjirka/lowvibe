@@ -49,7 +49,8 @@ Collaborative, Direct, Actionable. NO passive observation ("You are editing...")
 Set loopDetected=true if:
 - Same error repeated 2+ times
 - Same tool call repeated identically
-- "String to replace not found" error (Advisor: "Search block implies whitespace mismatch. Use shorter, unique anchor strings.")
+- "String to replace not found" error (Advice: "Use shorter, unique anchor strings.")
+- **Syntax error persisting after 2+ fix attempts** (Advice: "STOP editing this file. Create a NEW file from scratch with correct syntax, then replace the broken one.")
 
 ## Your Output
 1. codingAdvice: Specific technical advice for the code.
@@ -59,7 +60,8 @@ Set loopDetected=true if:
 
 ## Focus
 - Focus heavily on the MOST RECENT tool output (usually the last run_cmd).
-- Ensure the agent isn't hallucinating success.`;
+- Ensure the agent isn't hallucinating success.
+- If syntax errors persist, ALWAYS suggest creating a fresh file.`;
     }
 
     buildUserPrompt(variables: SupervisorVariables): string {
@@ -90,10 +92,8 @@ Set loopDetected=true if:
 
         const messagesPreview = relevantMessages
             .map((m) => {
-                const content = m.content.length > 800 // Increased limit to see more output
-                    ? m.content.substring(0, 800) + '... (truncated)'
-                    : m.content;
-                return `[${m.role}] ${content}`;
+                // No truncation - duck needs full file contents to debug effectively
+                return `[${m.role}] ${m.content}`;
             })
             .join('\n\n');
 

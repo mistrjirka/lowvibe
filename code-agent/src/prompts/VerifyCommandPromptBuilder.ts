@@ -33,36 +33,31 @@ export class VerifyCommandPromptBuilder implements IPromptBuilder<VerifyCommandV
     }
 
     buildSystemPrompt(): string {
-        return `You are a command verifier. Your job is to check if a shell command will work given the current directory and available files.
+        return `You are a command path verifier. Check if referenced files/directories exist in the file tree.
 
-## Your Task:
-1. Analyze the command and check if all referenced files exist in the file tree
-2. If the command will work, return valid: true
-3. If fixable (wrong path), return valid: false with correctedCmd and/or correctedCwd
-4. If not fixable, return valid: false with a helpful error message
+## CRITICAL RULES:
+1. If a file/directory EXISTS in the file tree, the command is VALID. Return valid: true.
+2. ONLY return valid: false if a file is CLEARLY missing from the tree.
+3. Do NOT invent errors. If unsure, assume the command is valid.
+4. Executables without extensions (like "dp_implementation") are VALID on Linux.
+5. "cd <subdir>" is VALID if that subdir exists in the file tree.
 
-## Common Issues to Check:
-- Python script not in the cwd but exists elsewhere in the tree
-- Input file (< file.txt) path is wrong
-- Using relative paths that don't match the file tree structure
-- Using ".." to access files outside the repository root (STRICTLY FORBIDDEN)
-- Changing directory (cd) to outside the repository root
+## When to return valid: false (with correctedCmd or error):
+- Input file referenced via "<" doesn't exist at the expected path
+- Script file doesn't exist at the expected path (but might exist elsewhere in tree - provide correction)
 
-## Output Format:
-Return a JSON object with:
-- valid: boolean - will the command work?
-- correctedCmd: string (optional) - fixed command if path needed correction
-- correctedCwd: string (optional) - correct cwd relative to root (empty string = root)
-- error: string (optional) - explanation of what's wrong
+## When to return valid: true:
+- Executable exists in tree
+- Directory exists for cd command
+- All referenced input files exist
+- You are unsure (default to valid)
 
-## Example:
-Command: "python script.py < data/input.txt"
-CWD: "/project/subdir"
-If script.py is in /project not /project/subdir, return:
+## Output:
 {
-  "valid": false,
-  "correctedCwd": "",
-  "error": "script.py is in root, not subdir"
+  "valid": true/false,
+  "correctedCmd": "...", // only if you can fix a path
+  "correctedCwd": "...", // only if cwd needs to change
+  "error": "..." // only if valid is false and unfixable
 }`;
     }
 

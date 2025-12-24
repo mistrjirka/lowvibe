@@ -29,7 +29,7 @@ export function App() {
         model: '',
         baseUrl: 'http://localhost:1234/v1',
         maxContextHistory: 10,
-        summarizationThreshold: 0.85,
+        summarizationThreshold: 0.65,
         supervisorInterval: 5
     });
 

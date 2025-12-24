@@ -8,6 +8,7 @@ import { readFile, ReadFileSchema } from '../tools/read_file';
 import { runCmd, RunCmdSchema } from '../tools/run_cmd';
 import { markTodoDone, addTodo, updateTodo, MarkTodoDoneSchema, AddTodoSchema, UpdateTodoSchema } from '../tools/manage_todos';
 import { ContextManager } from '../utils/contextManager';
+import { callWithContextRetry } from '../utils/ContextViewBuilder';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -137,7 +138,7 @@ export class ExecutePlanNode implements Node<AgentState> {
         // Context manager for pruning tool calls and summarization
         const contextManager = new ContextManager({
             maxToolCalls: 5,           // Keep last 5 tool calls in full
-            summarizationThreshold: state.config?.summarizationThreshold || 0.6,
+            summarizationThreshold: state.config?.summarizationThreshold || 0.65,
             recentMessagesToKeep: state.config?.maxContextHistory || 10
         });
         while (stepCount < this.maxSteps) {
@@ -226,7 +227,14 @@ export class ExecutePlanNode implements Node<AgentState> {
                         );
                     } catch (e) { /* ignore */ }
 
-                    const rawSupervisor = await client.completion(supervisorMessages, supervisorJsonSchema, "SupervisorOutput");
+                    // Use adaptive retry in case context overflows
+                    const rawSupervisor = await callWithContextRetry(
+                        client,
+                        supervisorMessages,
+                        50, // Start with up to 50 messages for supervisor
+                        supervisorJsonSchema,
+                        "SupervisorOutput"
+                    );
                     const supervisorResult = SupervisorSchema.parse(rawSupervisor);
 
                     context.logger(`[Supervisor] 🦆 Loop: ${supervisorResult.loopDetected}, Progress: ${supervisorResult.progressMade}, Confidence: ${supervisorResult.confidence}`);

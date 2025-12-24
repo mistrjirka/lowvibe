@@ -188,7 +188,7 @@ export function ChatPanel({
                                     min="0.1"
                                     max="1.0"
                                     className="input-field"
-                                    value={config.summarizationThreshold || 0.85}
+                                    value={config.summarizationThreshold || 0.65}
                                     onChange={(e) => onConfigChange({ ...config, summarizationThreshold: parseFloat(e.target.value) })}
                                     title="Token usage threshold (0.0-1.0) to trigger summarization"
                                 />
