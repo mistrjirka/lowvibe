@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 import { z } from 'zod';
 
 export const RunCmdSchema = z.object({
@@ -9,7 +10,40 @@ export const RunCmdSchema = z.object({
 
 export type RunCmdArgs = z.infer<typeof RunCmdSchema>;
 
-export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exitCode: number; stdout: string; stderr: string; cwd: string; repoRoot: string; error?: string }> {
+const OUTPUT_TRUNCATE_THRESHOLD = 5000; // chars
+const OUTPUT_SHOW_HALF = 2000; // show first and last this many chars
+
+/**
+ * Truncate large output, save full output to file, and advise using tail/head
+ */
+function truncateLargeOutput(output: string, type: 'stdout' | 'stderr', repoRoot: string): { truncated: string; savedPath?: string } {
+    if (output.length <= OUTPUT_TRUNCATE_THRESHOLD) {
+        return { truncated: output };
+    }
+
+    // Save full output to file
+    const logsDir = path.join(repoRoot, 'logs');
+    if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `cmd_${type}_${timestamp}.txt`;
+    const savedPath = path.join(logsDir, filename);
+    fs.writeFileSync(savedPath, output);
+
+    // Truncate for return - show first and last portions
+    const firstPart = output.slice(0, OUTPUT_SHOW_HALF);
+    const lastPart = output.slice(-OUTPUT_SHOW_HALF);
+    const truncated = firstPart +
+        `\n\n... MIDDLE TRUNCATED (${output.length} chars total, showing first and last ${OUTPUT_SHOW_HALF}) ...\n\n` +
+        lastPart +
+        `\n\nFull output saved to: ${path.relative(repoRoot, savedPath)}\n` +
+        `TIP: Use "tail -n 50 ${path.relative(repoRoot, savedPath)}" or "head -n 50 ${path.relative(repoRoot, savedPath)}" to view other portions.`;
+
+    return { truncated, savedPath: path.relative(repoRoot, savedPath) };
+}
+
+export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exitCode: number; stdout: string; stderr: string; cwd: string; repoRoot: string; savedPaths?: { stdout?: string; stderr?: string }; error?: string }> {
     const cwd = args.cwd ? path.resolve(repoRoot, args.cwd) : repoRoot;
 
     // Simple security check (imperfect, but basic)
@@ -24,7 +58,6 @@ export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exit
         // Handle Ctrl+C (SIGINT)
         const sigintHandler = () => {
             console.log('\n[CLI] Caught SIGINT. Terminating child process...');
-            // Kill the child process (and its process group if possible, but basic kill is usually enough)
             child.kill('SIGINT');
         };
         process.on('SIGINT', sigintHandler);
@@ -41,13 +74,30 @@ export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exit
         });
 
         child.on('error', (err) => {
-            process.off('SIGINT', sigintHandler); // Cleanup
+            process.off('SIGINT', sigintHandler);
             resolve({ exitCode: -1, stdout, stderr, cwd, repoRoot, error: err.message });
         });
 
         child.on('close', (code) => {
-            process.off('SIGINT', sigintHandler); // Cleanup
-            resolve({ exitCode: code ?? -1, stdout, stderr, cwd, repoRoot }); // Exit code might be null if killed
+            process.off('SIGINT', sigintHandler);
+
+            // Truncate large outputs
+            const stdoutResult = truncateLargeOutput(stdout, 'stdout', repoRoot);
+            const stderrResult = truncateLargeOutput(stderr, 'stderr', repoRoot);
+
+            const savedPaths: { stdout?: string; stderr?: string } = {};
+            if (stdoutResult.savedPath) savedPaths.stdout = stdoutResult.savedPath;
+            if (stderrResult.savedPath) savedPaths.stderr = stderrResult.savedPath;
+
+            resolve({
+                exitCode: code ?? -1,
+                stdout: stdoutResult.truncated,
+                stderr: stderrResult.truncated,
+                cwd,
+                repoRoot,
+                ...(Object.keys(savedPaths).length > 0 ? { savedPaths } : {})
+            });
         });
     });
 }
+

@@ -9,6 +9,11 @@ import { runCmd, RunCmdSchema } from '../tools/run_cmd';
 import { markTodoDone, addTodo, updateTodo, MarkTodoDoneSchema, AddTodoSchema, UpdateTodoSchema } from '../tools/manage_todos';
 import { ContextManager } from '../utils/contextManager';
 import { callWithContextRetry } from '../utils/ContextViewBuilder';
+import { getFileOutline, GetFileOutlineSchema } from '../tools/get_file_outline';
+import { readFunction, ReadFunctionSchema } from '../tools/read_function';
+import { editFunction, EditFunctionSchema } from '../tools/edit_function';
+import { addFunction, AddFunctionSchema, removeFunction, RemoveFunctionSchema } from '../tools/add_remove_function';
+import { editRange, EditRangeSchema } from '../tools/edit_range';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -581,7 +586,8 @@ export class ExecutePlanNode implements Node<AgentState> {
                         case "mark_todo_done":
                             if (state.plan) {
                                 toolResult = markTodoDone(state.plan, MarkTodoDoneSchema.parse(response.args));
-                                this.emit('plan:updated', { plan: state.plan });
+                                // Emit deep copy so React sees a new object reference
+                                this.emit('plan:updated', { plan: JSON.parse(JSON.stringify(state.plan)) });
                             } else {
                                 toolResult = { error: 'No plan available to modify' };
                             }
@@ -589,7 +595,7 @@ export class ExecutePlanNode implements Node<AgentState> {
                         case "add_todo":
                             if (state.plan) {
                                 toolResult = addTodo(state.plan, AddTodoSchema.parse(response.args));
-                                this.emit('plan:updated', { plan: state.plan });
+                                this.emit('plan:updated', { plan: JSON.parse(JSON.stringify(state.plan)) });
                             } else {
                                 toolResult = { error: 'No plan available to modify' };
                             }
@@ -597,10 +603,28 @@ export class ExecutePlanNode implements Node<AgentState> {
                         case "update_todo":
                             if (state.plan) {
                                 toolResult = updateTodo(state.plan, UpdateTodoSchema.parse(response.args));
-                                this.emit('plan:updated', { plan: state.plan });
+                                this.emit('plan:updated', { plan: JSON.parse(JSON.stringify(state.plan)) });
                             } else {
                                 toolResult = { error: 'No plan available to modify' };
                             }
+                            break;
+                        case "get_file_outline":
+                            toolResult = getFileOutline(state.repoRoot, GetFileOutlineSchema.parse(response.args));
+                            break;
+                        case "read_function":
+                            toolResult = readFunction(state.repoRoot, ReadFunctionSchema.parse(response.args));
+                            break;
+                        case "edit_function":
+                            toolResult = editFunction(state.repoRoot, EditFunctionSchema.parse(response.args));
+                            break;
+                        case "add_function":
+                            toolResult = addFunction(state.repoRoot, AddFunctionSchema.parse(response.args));
+                            break;
+                        case "remove_function":
+                            toolResult = removeFunction(state.repoRoot, RemoveFunctionSchema.parse(response.args));
+                            break;
+                        case "edit_range":
+                            toolResult = editRange(state.repoRoot, EditRangeSchema.parse(response.args));
                             break;
                         default:
                             toolResult = { error: "Unknown tool" };

@@ -49,8 +49,18 @@ Collaborative, Direct, Actionable. NO passive observation ("You are editing...")
 Set loopDetected=true if:
 - Same error repeated 2+ times
 - Same tool call repeated identically
-- "String to replace not found" error (Advice: "Use shorter, unique anchor strings.")
-- **Syntax error persisting after 2+ fix attempts** (Advice: "STOP editing this file. Create a NEW file from scratch with correct syntax, then replace the broken one.")
+- "String to replace not found" error (Advice: "Use get_file_outline to see functions, then use edit_function instead of replace_in_file.")
+- **Syntax error persisting after 2+ fix attempts** (Advice: "STOP editing. Use remove_function then add_function with correct code, OR create a NEW file from scratch.")
+- **replace_in_file failures** (Advice: "STOP using replace_in_file. Use get_file_outline to see structure, then read_function + edit_function for reliable edits.")
+
+## AST Tools (RECOMMEND THESE)
+When the agent struggles with file edits, recommend:
+- get_file_outline: See functions/classes/variables with line numbers
+- read_function: Read specific function by name
+- edit_function: Replace entire function (safer than find/replace)
+- add_function: Insert code at specific line
+- remove_function: Delete function by name
+These are MORE RELIABLE than replace_in_file.
 
 ## Your Output
 1. codingAdvice: Specific technical advice for the code.
@@ -61,7 +71,8 @@ Set loopDetected=true if:
 ## Focus
 - Focus heavily on the MOST RECENT tool output (usually the last run_cmd).
 - Ensure the agent isn't hallucinating success.
-- If syntax errors persist, ALWAYS suggest creating a fresh file.`;
+- **C/C++ CHECK**: If working on C/C++, verify the agent compiled (clang++/clang) before running. If not, advise: "Compile first with clang++ -o program program.cpp before running."
+- If syntax errors persist, ALWAYS suggest using AST tools or creating a fresh file.`;
     }
 
     buildUserPrompt(variables: SupervisorVariables): string {

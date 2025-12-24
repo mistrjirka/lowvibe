@@ -91,6 +91,69 @@ const UpdateTodoToolCall = z.object({
     })
 });
 
+// get_file_outline: Get structural outline of a file (functions, classes, variables)
+const GetFileOutlineToolCall = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('get_file_outline'),
+    args: z.object({
+        path: z.string()
+    })
+});
+
+// read_function: Read a specific function/class by name
+const ReadFunctionToolCall = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('read_function'),
+    args: z.object({
+        path: z.string(),
+        name: z.string()
+    })
+});
+
+// edit_function: Edit a specific function/class by name
+const EditFunctionToolCall = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('edit_function'),
+    args: z.object({
+        path: z.string(),
+        name: z.string(),
+        newContent: z.string()
+    })
+});
+
+// add_function: Add new code at a specific line
+const AddFunctionToolCall = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('add_function'),
+    args: z.object({
+        path: z.string(),
+        code: z.string(),
+        insertAtLine: z.number()
+    })
+});
+
+// remove_function: Remove a function/class by name
+const RemoveFunctionToolCall = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('remove_function'),
+    args: z.object({
+        path: z.string(),
+        name: z.string()
+    })
+});
+
+// edit_range: Replace lines by range (more flexible than edit_function)
+const EditRangeToolCall = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('edit_range'),
+    args: z.object({
+        path: z.string(),
+        startLine: z.number(),
+        endLine: z.number(),
+        newContent: z.string()
+    })
+});
+
 /**
  * Strict AgentStepSchema - each tool has its own exact schema.
  * This prevents malformed args like {"path":{"$ref":"..."}}
@@ -104,7 +167,13 @@ export const AgentStepSchema = z.union([
     RunCmdToolCall,
     MarkTodoDoneToolCall,
     AddTodoToolCall,
-    UpdateTodoToolCall
+    UpdateTodoToolCall,
+    GetFileOutlineToolCall,
+    ReadFunctionToolCall,
+    EditFunctionToolCall,
+    AddFunctionToolCall,
+    RemoveFunctionToolCall,
+    EditRangeToolCall
 ]);
 
 /**
@@ -177,6 +246,38 @@ Update a todo's title, details, or status.
 Arguments: { "index": <1-based todo number>, "title": "<new title>", "details": "<new details>", "status": "pending"|"completed"|"failed" }
 Example: {"type":"tool_call","tool":"update_todo","args":{"index":2,"status":"failed"}}
 
+### get_file_outline
+Get structural outline of a Python/C++ file (functions, classes, variables) with line numbers.
+Arguments: { "path": "<relative file path>" }
+Returns: { outline: [ { type, name, line, endLine, children? } ], allNames: [...] }
+Example: {"type":"tool_call","tool":"get_file_outline","args":{"path":"main.py"}}
+Use this to understand file structure before editing specific functions.
+
+### read_function
+Read a specific function/class by name (more efficient than reading entire file).
+Arguments: { "path": "<relative file path>", "name": "<function/class name>" }
+Example: {"type":"tool_call","tool":"read_function","args":{"path":"main.py","name":"process_data"}}
+
+### edit_function
+Replace a function/class by name with new content (safer than replace_in_file for function-level edits).
+Arguments: { "path": "<relative file path>", "name": "<function/class name>", "newContent": "<full new function code>" }
+Example: {"type":"tool_call","tool":"edit_function","args":{"path":"main.py","name":"add","newContent":"def add(a, b):\\n    return a + b"}}
+
+### add_function
+Insert new code at a specific line number.
+Arguments: { "path": "<relative file path>", "code": "<code to insert>", "insertAtLine": <line number> }
+Example: {"type":"tool_call","tool":"add_function","args":{"path":"main.py","code":"def helper():\\n    pass","insertAtLine":10}}
+
+### remove_function
+Remove a function/class by name.
+Arguments: { "path": "<relative file path>", "name": "<function/class name>" }
+Example: {"type":"tool_call","tool":"remove_function","args":{"path":"main.py","name":"old_helper"}}
+
+### edit_range
+Replace lines by range (use with get_file_outline to know line numbers).
+Arguments: { "path": "<relative file path>", "startLine": <start line>, "endLine": <end line>, "newContent": "<replacement code>" }
+Example: {"type":"tool_call","tool":"edit_range","args":{"path":"main.py","startLine":10,"endLine":25,"newContent":"# New implementation\\ndef improved_function():\\n    pass"}}
+
 ## Response Types:
 1. message: Progress update
    {"type":"message","text":"<your progress message>"}
@@ -190,12 +291,33 @@ Example: {"type":"tool_call","tool":"update_todo","args":{"index":2,"status":"fa
 - All tool arguments MUST be literal strings or numbers. Do NOT use JSON references ($ref), nested objects, or any complex types.
 - The "path" argument must always be a simple string like "main.py" or "src/utils.py"
 - Execute one step at a time
-- Use replace_in_file for edits (find exact text, replace with new text)
+
+## EDITING FILES (IMPORTANT - USE AST TOOLS):
+- **PREFERRED**: For Python/C++ files, use get_file_outline first, then edit_function/add_function/remove_function.
+  These are MUCH MORE RELIABLE than replace_in_file.
+- **FALLBACK**: Only use replace_in_file if AST tools don't support the file type or for very simple edits.
+- **WORKFLOW FOR EDITS**:
+  1. get_file_outline("file.py") → See all functions/classes with line numbers
+  2. read_function("file.py", "function_name") → Read specific function
+  3. edit_function("file.py", "function_name", "new code...") → Replace it
+  -OR- add_function("file.py", "new code...", line_number) → Insert new code
+  -OR- remove_function("file.py", "old_function") → Delete a function
+
+## VERIFICATION:
 - Verify your changes work before marking complete
+- **C/C++ REMINDER**: C and C++ are COMPILED languages. After EVERY code change, you MUST compile before testing:
+  - C++: \`clang++ -o program program.cpp\` then \`./program\`
+  - C: \`clang -o program program.c\` then \`./program\`
+  - **IMPORT TIP**: Use \`#include<bits/stdc++.h>\` to import all standard libraries at once.
+  - **NAMESPACE TIP**: Remember to use \`std::\` prefix (e.g., \`std::vector\`, \`std::string\`, \`std::cout\`) or add \`using namespace std;\` at the top.
+  - **INPUT TIP**: Watch for \\r (Windows line endings) in input files. Strip them with: \`line.erase(std::remove(line.begin(), line.end(), '\\r'), line.end());\`
+  - **OVERFLOW TIP**: Use 64-bit types by default to avoid overflow: \`long long\` for integers, \`double\` for floats. Avoid \`int\` for large numbers.
+  - **LIMITS TIP**: For max/min values, use: \`std::numeric_limits<long long>::max()\` or \`std::numeric_limits<long long>::min()\`.
 - CRITICAL: If you used multiple temporary files, you MUST integrate them into the final requested file structure and verify the solution works before marking the task as complete.
 - When finishing, you MUST output a brief explanation of how to use your solution and how it works.
 - ANTI-LOOP: If you see in the conversation history that you have tried the SAME approach multiple times and it keeps failing, you MUST try a FUNDAMENTALLY DIFFERENT approach. Do NOT repeat the same fix. Step back and reconsider your logic.
 - ANTI-LOOP: If the same error appears 2+ times, the problem is likely in your UNDERSTANDING of the problem, not just the code. Re-read the requirements.
+- ANTI-LOOP: If replace_in_file keeps failing, SWITCH to get_file_outline + edit_function.
 - WORKFLOW: After EVERY tool call, you MUST output a "message" type explaining what happened and what you will do next. Only then can you make another tool call.
 
 ## TODO MANAGEMENT (IMPORTANT):
