@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { detectLanguage, getOutline, findByName } from './ast_parser';
+import { getFileDiff } from '../utils/fileTracker';
 
 // Add function schema
 export const AddFunctionSchema = z.object({
@@ -23,7 +24,27 @@ export type RemoveFunctionArgs = z.infer<typeof RemoveFunctionSchema>;
 /**
  * Add a new function/class at a specific line
  */
-export function addFunction(repoRoot: string, args: AddFunctionArgs): { success: boolean; message: string } | { error: string } {
+/**
+ * Helper to find the deepest node containing the target line
+ */
+function findContainingNode(items: import('./ast_parser').OutlineItem[], line: number): import('./ast_parser').OutlineItem | null {
+    for (const item of items) {
+        if (line >= item.line && line <= item.endLine) {
+            // Check children for a more specific match
+            if (item.children) {
+                const childMatch = findContainingNode(item.children, line);
+                if (childMatch) return childMatch;
+            }
+            return item;
+        }
+    }
+    return null;
+}
+
+/**
+ * Add a new function/class at a specific line
+ */
+export function addFunction(repoRoot: string, args: AddFunctionArgs): { success: boolean; message: string; diff?: string } | { error: string } {
     const absolutePath = path.resolve(repoRoot, args.path);
 
     if (!absolutePath.startsWith(path.resolve(repoRoot))) {
@@ -37,17 +58,52 @@ export function addFunction(repoRoot: string, args: AddFunctionArgs): { success:
     try {
         const content = fs.readFileSync(absolutePath, 'utf-8');
         const lines = content.split('\n');
+        let insertAtLine = args.insertAtLine;
+        let warning = '';
 
-        const insertIndex = Math.max(0, Math.min(args.insertAtLine - 1, lines.length));
+        // Smart Insertion Logic: Check if we are inside another function
+        const language = detectLanguage(args.path);
+        if (language !== 'unknown') {
+            try {
+                const outline = getOutline(content, language);
+                const containingNode = findContainingNode(outline, insertAtLine);
+
+                // If we are strictly inside a function/class/method (not just at the start/end boundaries)
+                // And the code being added looks like a function/class definition
+                if (containingNode && ['function', 'method', 'class'].includes(containingNode.type)) {
+                    const isDef = /^\s*(def|class|async def|void|int|bool|string|public|private|protected)\b/.test(args.code);
+
+                    // If adding a definition inside another definition, probably a mistake.
+                    // Exception: User might legitimately want inner functions, but usually not for global tasks.
+                    // We assume if the user picked a line in the middle, they might have meant "after this function"
+                    // checking if the line is NOT the last line (which might be the intended insertion point)
+                    if (isDef && insertAtLine > containingNode.line && insertAtLine < containingNode.endLine) {
+                        // Adjust to end of function
+                        insertAtLine = containingNode.endLine + 1;
+                        warning = ` (Adjusted insertion from line ${args.insertAtLine} to ${insertAtLine} to avoid breaking '${containingNode.name}')`;
+                    }
+                }
+            } catch (astError) {
+                // Ignore AST errors, fall back to raw line insertion
+                console.warn('AST parsing failed during addFunction:', astError);
+            }
+        }
+
+        const insertIndex = Math.max(0, Math.min(insertAtLine - 1, lines.length));
         const newCodeLines = args.code.split('\n');
 
         lines.splice(insertIndex, 0, ...newCodeLines);
 
-        fs.writeFileSync(absolutePath, lines.join('\n'), 'utf-8');
+        const newContent = lines.join('\n');
+        fs.writeFileSync(absolutePath, newContent, 'utf-8');
+
+        // Generate diff
+        const diff = getFileDiff(content, newContent);
 
         return {
             success: true,
-            message: `Inserted ${newCodeLines.length} lines at line ${args.insertAtLine}`
+            message: `Inserted ${newCodeLines.length} lines at line ${insertAtLine}${warning}`,
+            diff
         };
     } catch (err: any) {
         return { error: `Failed to add function: ${err.message}` };
@@ -57,7 +113,7 @@ export function addFunction(repoRoot: string, args: AddFunctionArgs): { success:
 /**
  * Remove a function/class by name
  */
-export function removeFunction(repoRoot: string, args: RemoveFunctionArgs): { success: boolean; message: string; linesRemoved: number } | { error: string } {
+export function removeFunction(repoRoot: string, args: RemoveFunctionArgs): { success: boolean; message: string; linesRemoved: number; diff?: string } | { error: string } {
     const absolutePath = path.resolve(repoRoot, args.path);
 
     if (!absolutePath.startsWith(path.resolve(repoRoot))) {
@@ -90,10 +146,15 @@ export function removeFunction(repoRoot: string, args: RemoveFunctionArgs): { su
         fs.writeFileSync(absolutePath, newContent, 'utf-8');
 
         const linesRemoved = item.endLine - item.line + 1;
+
+        // Generate diff
+        const diff = getFileDiff(content, newContent);
+
         return {
             success: true,
             message: `Removed "${args.name}" (lines ${item.line}-${item.endLine})`,
-            linesRemoved
+            linesRemoved,
+            diff
         };
     } catch (err: any) {
         return { error: `Failed to remove function: ${err.message}` };

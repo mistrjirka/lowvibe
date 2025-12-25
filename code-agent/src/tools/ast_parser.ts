@@ -28,7 +28,7 @@ function ensureTreeSitterLoaded(): void {
 }
 
 export interface OutlineItem {
-    type: 'class' | 'function' | 'method' | 'variable';
+    type: 'class' | 'function' | 'method' | 'variable' | 'logic';
     name: string;
     line: number;
     endLine: number;
@@ -113,6 +113,19 @@ function extractPythonOutline(tree: any, content: string): OutlineItem[] {
                         endLine: node.endPosition.row + 1
                     });
                 }
+            }
+        } else if (['if_statement', 'for_statement', 'while_statement', 'try_statement', 'with_statement'].includes(node.type) && node.parent?.type === 'module') {
+            // Top-level logic blocks
+            outline.push({
+                type: 'logic',
+                name: node.type.replace('_statement', ''),
+                line: node.startPosition.row + 1,
+                endLine: node.endPosition.row + 1
+            });
+
+            // Continue traversing to find nested classes/functions
+            for (const child of node.children) {
+                visit(child, parent);
             }
         } else {
             // Continue traversing

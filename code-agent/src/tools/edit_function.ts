@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { detectLanguage, getOutline, findByName } from './ast_parser';
+import { getFileDiff } from '../utils/fileTracker';
 
 export const EditFunctionSchema = z.object({
     path: z.string().describe('Path to the file (relative to repo root)'),
@@ -55,14 +56,17 @@ export function editFunction(repoRoot: string, args: EditFunctionArgs): { succes
             );
         }
 
-        const newContent = [...before, ...newContentLines, ...after].join('\n');
+        const newFileContent = [...before, ...newContentLines, ...after].join('\n');
 
-        fs.writeFileSync(absolutePath, newContent, 'utf-8');
+        fs.writeFileSync(absolutePath, newFileContent, 'utf-8');
+
+        // Generate real diff
+        const diff = getFileDiff(content, newFileContent);
 
         return {
             success: true,
-            message: `Replaced "${args.name}" (lines ${item.line}-${item.endLine}) with new content`,
-            diff: `- removed ${item.endLine - item.line + 1} lines\n+ added ${newContentLines.length} lines`
+            message: `Successfully edited ${item.type} "${args.name}"`,
+            diff
         };
     } catch (err: any) {
         return { error: `Failed to edit function: ${err.message}` };

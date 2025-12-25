@@ -8,10 +8,10 @@ import { readFile, ReadFileSchema } from '../tools/read_file';
 import { runCmd, RunCmdSchema } from '../tools/run_cmd';
 import { markTodoDone, addTodo, updateTodo, MarkTodoDoneSchema, AddTodoSchema, UpdateTodoSchema } from '../tools/manage_todos';
 import { ContextManager } from '../utils/contextManager';
-import { callWithContextRetry } from '../utils/ContextViewBuilder';
+import { callWithContextRetry, ContextViewBuilder, Message } from '../utils/ContextViewBuilder';
 import { getFileOutline, GetFileOutlineSchema } from '../tools/get_file_outline';
 import { readFunction, ReadFunctionSchema } from '../tools/read_function';
-import { editFunction, EditFunctionSchema } from '../tools/edit_function';
+import { replaceCodeblock, ReplaceCodeblockSchema } from '../tools/replace_codeblock';
 import { addFunction, AddFunctionSchema, removeFunction, RemoveFunctionSchema } from '../tools/add_remove_function';
 import { editRange, EditRangeSchema } from '../tools/edit_range';
 import { EventEmitter } from 'events';
@@ -201,46 +201,155 @@ export class ExecutePlanNode implements Node<AgentState> {
                         }
                     }
 
-                    const supervisorMessages = [
-                        { role: "system", content: supervisorPromptBuilder.buildSystemPrompt() },
-                        {
-                            role: "user",
-                            content: supervisorPromptBuilder.buildUserPrompt({
-                                recentMessages: messages.slice(-50)
-                                    .map(m => ({
-                                        role: m.role,
-                                        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-                                    }))
-                                    .filter(m => !m.content.includes(state.userTask)), // Deduplicate original task for supervisor
-                                todoStatus: state.plan?.todos || [],
-                                recentToolOutputs: recentToolOutputs.slice(-5),
-                                recentErrors: recentErrors.slice(-5),
-                                recentFiles: recentFiles.slice(-10),
-                                userTask: state.userTask,
-                                planRestatement: state.plan?.restatement
-                            })
+                    // === ADAPTIVE SUPERVISOR CONTEXT WITH LLM SUMMARIZATION ===
+                    // Uses the same ContextViewBuilder as the main agent loop
+                    // Strategy:
+                    // 1. Use buildView() to get messages with LLM-summarized middle section
+                    // 2. On context overflow: halve preserveLast and retry
+                    // 3. Only truncate individual messages as absolute last resort
+
+                    const viewBuilder = new ContextViewBuilder(client);
+                    let preserveLast = 10;  // Start with 10 recent messages preserved
+                    const MIN_PRESERVE_LAST = 2;
+                    const MAX_CONTEXT_RETRIES = 5;
+                    let supervisorResult: any = null;
+                    let contextRetries = 0;
+                    let shouldTruncate = false;
+
+                    while (contextRetries < MAX_CONTEXT_RETRIES && !supervisorResult) {
+                        // Prepare messages for ContextViewBuilder
+                        const allMsgs = messages.map(m => ({
+                            role: m.role,
+                            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+                        })).filter(m => !m.content.includes(state.userTask)); // Deduplicate task
+
+                        // Use ContextViewBuilder to get summarized view
+                        // preserveFirst=0 because supervisor doesn't need the original system prompt
+                        // preserveLast=N to keep recent messages in full
+                        const maxMsgsForView = 20; // Target message count after summarization
+                        let view: { messages: Message[]; summarizedCount: number };
+
+                        try {
+                            view = await viewBuilder.buildView(allMsgs, maxMsgsForView, 0, preserveLast);
+                            context.logger(`[Supervisor] Built view: ${view.messages.length} messages, ${view.summarizedCount} summarized`);
+                        } catch (viewErr: any) {
+                            // Summarization itself might fail on context overflow
+                            // Fall back to simple metadata summary
+                            context.logger(`[Supervisor] ⚠️ LLM summarization failed: ${viewErr.message}. Using metadata summary.`);
+                            const toolCalls = allMsgs.filter(m => m.content.includes('"tool":')).length;
+                            const errors = allMsgs.filter(m => m.content.includes('error') || m.content.includes('Error')).length;
+                            view = {
+                                messages: [
+                                    { role: 'system', content: `[EARLIER CONTEXT: ${allMsgs.length - preserveLast} messages, ${toolCalls} tool calls, ${errors} errors. Files: ${recentFiles.slice(0, 5).join(', ')}]` },
+                                    ...allMsgs.slice(-preserveLast)
+                                ],
+                                summarizedCount: allMsgs.length - preserveLast
+                            };
                         }
-                    ];
 
-                    // LOG SUPERVISOR PROMPT
-                    try {
-                        const logsDir = path.resolve(process.cwd(), 'logs');
-                        if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
-                        fs.writeFileSync(
-                            path.join(logsDir, `step_${stepCount}_supervisor_prompt.json`),
-                            JSON.stringify(supervisorMessages, null, 2)
-                        );
-                    } catch (e) { /* ignore */ }
+                        // Apply truncation ONLY if we've already failed multiple times
+                        let finalMessages = view.messages;
+                        if (shouldTruncate) {
+                            const MAX_MSG_CHARS = 2000;
+                            finalMessages = view.messages.map(m => ({
+                                role: m.role,
+                                content: m.content.length > MAX_MSG_CHARS
+                                    ? m.content.slice(0, MAX_MSG_CHARS) + `\n... [TRUNCATED: ${m.content.length} chars]`
+                                    : m.content
+                            }));
+                        }
 
-                    // Use adaptive retry in case context overflows
-                    const rawSupervisor = await callWithContextRetry(
-                        client,
-                        supervisorMessages,
-                        50, // Start with up to 50 messages for supervisor
-                        supervisorJsonSchema,
-                        "SupervisorOutput"
-                    );
-                    const supervisorResult = SupervisorSchema.parse(rawSupervisor);
+                        const supervisorMessages = [
+                            { role: "system", content: supervisorPromptBuilder.buildSystemPrompt() },
+                            {
+                                role: "user",
+                                content: supervisorPromptBuilder.buildUserPrompt({
+                                    recentMessages: finalMessages,
+                                    todoStatus: state.plan?.todos || [],
+                                    recentToolOutputs: recentToolOutputs.slice(-5),
+                                    recentErrors: recentErrors.slice(-5),
+                                    recentFiles: recentFiles.slice(-10),
+                                    userTask: state.userTask,
+                                    planRestatement: state.plan?.restatement
+                                })
+                            }
+                        ];
+
+                        // LOG SUPERVISOR PROMPT
+                        try {
+                            const logsDir = path.resolve(process.cwd(), 'logs');
+                            if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+                            fs.writeFileSync(
+                                path.join(logsDir, `step_${stepCount}_supervisor_prompt.json`),
+                                JSON.stringify(supervisorMessages, null, 2)
+                            );
+                        } catch (e) { /* ignore */ }
+
+                        context.logger(`[Supervisor] preserveLast=${preserveLast}, truncate=${shouldTruncate} (attempt ${contextRetries + 1})`);
+
+                        let parseRetries = 0;
+                        const MAX_PARSE_RETRIES = 3;
+                        let lastParseError: string | null = null;
+
+                        while (parseRetries < MAX_PARSE_RETRIES) {
+                            try {
+                                if (lastParseError) {
+                                    supervisorMessages.push({
+                                        role: "user",
+                                        content: `\n\nPREVIOUS ATTEMPT FAILED WITH ERROR: ${lastParseError}\nPlease fix the JSON format and ensure enum values are valid (low, medium, high).`
+                                    });
+                                }
+
+                                const rawSupervisor = await client.completion(
+                                    supervisorMessages,
+                                    supervisorJsonSchema,
+                                    "SupervisorOutput"
+                                );
+
+                                supervisorResult = SupervisorSchema.parse(rawSupervisor);
+                                break; // Success!
+                            } catch (err: any) {
+                                const errMsg = err.message || '';
+
+                                // Check if context overflow
+                                if (errMsg.includes('context') || errMsg.includes('token') || errMsg.includes('length') || errMsg.includes('20000')) {
+                                    context.logger(`[Supervisor] Context overflow with preserveLast=${preserveLast}`);
+
+                                    // First try: halve preserveLast
+                                    if (preserveLast > MIN_PRESERVE_LAST) {
+                                        preserveLast = Math.max(MIN_PRESERVE_LAST, Math.floor(preserveLast / 2));
+                                        context.logger(`[Supervisor] Reducing preserveLast to ${preserveLast}...`);
+                                    } else if (!shouldTruncate) {
+                                        // Second try: enable truncation
+                                        shouldTruncate = true;
+                                        context.logger(`[Supervisor] Enabling message truncation...`);
+                                    } else {
+                                        // Give up
+                                        throw new Error(`Supervisor context too large even with ${preserveLast} truncated messages`);
+                                    }
+
+                                    contextRetries++;
+                                    break; // Break parse loop to rebuild
+                                }
+
+                                // Parse error - retry with feedback
+                                parseRetries++;
+                                lastParseError = errMsg;
+                                context.logger(`[Supervisor] ❌ PARSE ERROR (Attempt ${parseRetries}/${MAX_PARSE_RETRIES}): ${errMsg}`);
+
+                                if (parseRetries >= MAX_PARSE_RETRIES) {
+                                    throw err;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!supervisorResult) {
+                        throw new Error(`Supervisor failed after ${MAX_CONTEXT_RETRIES} context reduction attempts`);
+                    }
+
+
+
 
                     context.logger(`[Supervisor] 🦆 Loop: ${supervisorResult.loopDetected}, Progress: ${supervisorResult.progressMade}, Confidence: ${supervisorResult.confidence}`);
 
@@ -622,7 +731,8 @@ export class ExecutePlanNode implements Node<AgentState> {
                             toolResult = readFunction(state.repoRoot, ReadFunctionSchema.parse(response.args));
                             break;
                         case "edit_function":
-                            toolResult = editFunction(state.repoRoot, EditFunctionSchema.parse(response.args));
+                        case "replace_codeblock":
+                            toolResult = replaceCodeblock(state.repoRoot, ReplaceCodeblockSchema.parse(response.args));
                             break;
                         case "add_function":
                             toolResult = addFunction(state.repoRoot, AddFunctionSchema.parse(response.args));

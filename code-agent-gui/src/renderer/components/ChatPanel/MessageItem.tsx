@@ -64,6 +64,18 @@ export function MessageItem({ message, onViewDiff }: MessageItemProps) {
                         </div>
                     )}
                     <pre>{message.content}</pre>
+                    {message.result && typeof message.result === 'object' && 'diff' in message.result && message.result.diff && (
+                        <div className="message-diff">
+                            <strong>Diff:</strong>
+                            <pre>{(message.result as any).diff}</pre>
+                        </div>
+                    )}
+                    {message.diff && (
+                        <div className="message-diff">
+                            <strong>Diff:</strong>
+                            <pre>{message.diff}</pre>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

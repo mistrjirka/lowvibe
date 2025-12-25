@@ -11,7 +11,25 @@ export const SupervisorSchema = z.object({
     debuggingTips: z.string().describe('Specific debugging suggestions if there are errors'),
     nextStepSuggestion: z.string().describe('What the agent should focus on next'),
     todosToComplete: z.array(z.number()).describe('1-based indices of todos that appear to be done and should be marked complete'),
-    confidence: z.enum(['low', 'medium', 'high']).describe('How confident the agent seems: low, medium, or high')
+    confidence: z.preprocess(
+        (val) => {
+            if (Array.isArray(val)) return val[0];
+            if (typeof val === 'string') {
+                const lower = val.toLowerCase();
+                // Check substrings first
+                if (lower.includes('high')) return 'high';
+                if (lower.includes('medium')) return 'medium';
+                if (lower.includes('low')) return 'low';
+
+                // Fallback for cleanups
+                const cleaned = val.replace(/[\[\]"']/g, '').trim();
+                if (cleaned.includes(',')) return cleaned.split(',')[0].trim().toLowerCase();
+                return cleaned.toLowerCase();
+            }
+            return 'medium'; // Default fallback if type is weird
+        },
+        z.enum(['low', 'medium', 'high'])
+    ).describe('How confident the agent seems: low, medium, or high')
 });
 
 export type SupervisorOutput = z.infer<typeof SupervisorSchema>;

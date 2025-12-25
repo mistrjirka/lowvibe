@@ -11,6 +11,7 @@ export interface AgentMessage {
     args?: any;
     result?: any;
     diff?: string;
+    stepCount?: number;  // For matching tool calls with results
 }
 
 export interface AgentConfig {
@@ -91,6 +92,7 @@ export function useAgentEvents(): UseAgentEventsReturn {
     const [fileDiffs, setFileDiffs] = useState<FileDiff[]>([]);
     const [tokenUsage, setTokenUsage] = useState<TokenUsageState | null>(null);
 
+
     // Generate unique ID
     const genId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -165,6 +167,11 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     break;
 
                 case 'agent:message':
+                    // Suppress "[Agent Step X]" logs as they clutter the UI
+                    if (data.text.startsWith('\n[Agent Step') || data.text.startsWith('[Agent Step')) {
+                        return;
+                    }
+
                     setMessages(prev => [...prev, {
                         id: genId(),
                         type: 'message',
@@ -184,7 +191,10 @@ export function useAgentEvents(): UseAgentEventsReturn {
                         nodeName: currentNode || 'ExecutePlan',
                         timestamp: new Date(),
                         tool: data.tool,
-                        args: data.args
+                        args: data.args,
+                        result: undefined,
+                        diff: undefined,
+                        stepCount: data.stepCount
                     }]);
                     break;
 
@@ -199,17 +209,44 @@ export function useAgentEvents(): UseAgentEventsReturn {
                         }]);
                     }
 
-                    setMessages(prev => [...prev, {
-                        id: genId(),
-                        type: 'tool_result',
-                        summary: `Result: ${truncate(JSON.stringify(data.result), 60)}`,
-                        content: JSON.stringify(data.result, null, 2),
-                        nodeName: currentNode || 'ExecutePlan',
-                        timestamp: new Date(),
-                        tool: data.tool,
-                        result: data.result,
-                        diff: resultDiff
-                    }]);
+                    // Update the matching tool_call message by stepCount
+                    setMessages(prev => {
+                        // Find the tool_call with matching stepCount and tool name
+                        const matchIndex = prev.findIndex(
+                            msg => msg.type === 'tool_call' &&
+                                msg.stepCount === data.stepCount &&
+                                msg.tool === data.tool
+                        );
+
+                        if (matchIndex === -1) {
+                            // Fallback: no matching tool_call found, create standalone result
+                            console.warn('[useAgentEvents] No matching tool_call for result:', data.stepCount, data.tool);
+                            return [...prev, {
+                                id: genId(),
+                                type: 'tool_result',
+                                summary: `Result: ${truncate(JSON.stringify(data.result), 60)}`,
+                                content: JSON.stringify(data.result, null, 2),
+                                nodeName: currentNode || 'ExecutePlan',
+                                timestamp: new Date(),
+                                tool: data.tool,
+                                result: data.result,
+                                diff: resultDiff,
+                                stepCount: data.stepCount
+                            }];
+                        }
+
+                        // Update the matching tool_call message in place
+                        const updated = [...prev];
+                        const msg = updated[matchIndex];
+                        const success = data.result?.success !== false && !data.result?.error;
+                        updated[matchIndex] = {
+                            ...msg,
+                            summary: `${msg.tool}: ${success ? '✓' : '✗'}`,
+                            result: data.result,
+                            diff: resultDiff
+                        };
+                        return updated;
+                    });
                     break;
 
                 case 'agent:final':
@@ -257,6 +294,10 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     break;
 
                 case 'log':
+                    // Suppress redundant tool logs that are already shown as tool cards
+                    if (data.message.startsWith('[Agent Tool]')) {
+                        return;
+                    }
                     setMessages(prev => [...prev, {
                         id: genId(),
                         type: 'log',

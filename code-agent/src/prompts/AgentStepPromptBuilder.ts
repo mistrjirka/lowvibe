@@ -110,10 +110,20 @@ const ReadFunctionToolCall = z.object({
     })
 });
 
-// edit_function: Edit a specific function/class by name
+// edit_function / replace_codeblock: Replace a specific function/class/logic block by name
 const EditFunctionToolCall = z.object({
     type: z.literal('tool_call'),
     tool: z.literal('edit_function'),
+    args: z.object({
+        path: z.string(),
+        name: z.string(),
+        newContent: z.string()
+    })
+});
+
+const ReplaceCodeblockToolCall = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('replace_codeblock'),
     args: z.object({
         path: z.string(),
         name: z.string(),
@@ -171,6 +181,7 @@ export const AgentStepSchema = z.union([
     GetFileOutlineToolCall,
     ReadFunctionToolCall,
     EditFunctionToolCall,
+    ReplaceCodeblockToolCall,
     AddFunctionToolCall,
     RemoveFunctionToolCall,
     EditRangeToolCall

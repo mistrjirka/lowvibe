@@ -45,11 +45,48 @@ export function replaceInFile(repoRoot: string, args: ReplaceInFileArgs): Replac
         const count = matches ? matches.length : 0;
 
         if (count === 0) {
+            // FALLBACK: Try relaxed matching for line endings (CRLF vs LF)
+            // 1. Escape special regex characters in the search string
+            // 2. Replace logical newlines with flexible regex pattern \r?\n
+            const relaxedRegexStr = args.find
+                .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape regex chars
+                .replace(/(\r\n|\r|\n)/g, '\\r?\\n');   // Allow \r, \n, or \r\n to match \r?\n in file
+
+            const relaxedRegex = new RegExp(relaxedRegexStr, 'g');
+            const relaxedMatches = content.match(relaxedRegex);
+            const relaxedCount = relaxedMatches ? relaxedMatches.length : 0;
+
+            if (relaxedCount > 0 && (args.expectedReplacements === undefined || relaxedCount === args.expectedReplacements)) {
+                // Relaxed match found! Proceed with replacement using regex.
+                // NOTE: split/join uses literal replacement. String.replace(regex, str) parses '$' in str.
+                // We must escape '$' in replacement string to '$$' to treat it literally.
+                const safeReplacement = args.replace.replace(/\$/g, '$$$$');
+
+                // Create backup before modification
+                const backupPath = createFileBackup(absolutePath, content);
+                cleanupBackups(absolutePath, 10);
+
+                const newContent = content.replace(relaxedRegex, safeReplacement);
+
+                // Diff and write
+                const diff = getFileDiff(content, newContent);
+                fs.writeFileSync(absolutePath, newContent, 'utf-8');
+
+                return {
+                    success: true,
+                    replacementsMade: relaxedCount,
+                    diff,
+                    backupPath,
+                    // Note for the agent/user that we used relaxed matching
+                    error: undefined
+                };
+            }
+
             // Include full file content so agent can see what's actually in the file
             return {
                 success: false,
                 replacementsMade: 0,
-                error: "String to replace not found. Here is the current file content for reference:",
+                error: "String to replace not found (tried strict and relaxed line-ending match). Here is the current file content for reference:",
                 fileContent: content
             };
         }
