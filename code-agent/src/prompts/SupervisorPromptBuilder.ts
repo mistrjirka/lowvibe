@@ -68,9 +68,13 @@ These are MORE RELIABLE than replace_in_file.
 3. nextStepSuggestion: Directive for immediate next action.
 4. todosToComplete: Indices of DONE tasks.
 
+- **Premature Progression**: If the CURRENT task (e.g. input parsing) seems incomplete or unverified, DO NOT suggest solving the algorithm yet.
+- **Unverified Code**: If code was just written (via write_file/edit_function) but NOT run/tested, your advise MUST be: "Run the code to verify it works."
+
 ## Focus
 - Focus heavily on the MOST RECENT tool output (usually the last run_cmd).
-- Ensure the agent isn't hallucinating success.
+- **SEQUENTIAL EXECUTION**: Help the agent finish ONE task at a time. If task #1 (e.g. Input Parsing) is not done, ignore task #3.
+- **EXECUTION**: If the agent implemented something but didn't run it, suggest: "Run the implementation with \`python script.py < input.in\` or \`./program < input.in\` to verify."
 - **C/C++ CHECK**: If working on C/C++, verify the agent compiled (clang++/clang) before running. If not, advise: "Compile first with clang++ -o program program.cpp before running."
 - If syntax errors persist, ALWAYS suggest using AST tools or creating a fresh file.`;
     }

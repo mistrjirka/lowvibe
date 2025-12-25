@@ -21,7 +21,7 @@ import * as path from 'path';
 // Helper: Generate tree structure for orientation (1 level deep)
 function scanCurrentFiles(dir: string): string {
     try {
-        const items = fs.readdirSync(dir);
+        const items = fs.readdirSync(dir).filter(i => i !== '.code-agent-backup');
         const lines: string[] = [];
         for (const item of items.slice(0, 20)) {
             const fullPath = path.join(dir, item);
@@ -189,7 +189,7 @@ export class ExecutePlanNode implements Node<AgentState> {
 
                         // Track files
                         const pathMatch = content.match(/"path"\s*:\s*"([^"]+)"/);
-                        if (pathMatch && !recentFiles.includes(pathMatch[1])) {
+                        if (pathMatch && !recentFiles.includes(pathMatch[1]) && !pathMatch[1].includes('.code-agent-backup')) {
                             recentFiles.push(pathMatch[1]);
                         }
 
