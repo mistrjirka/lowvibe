@@ -228,8 +228,10 @@ Example: {"type":"tool_call","tool":"replace_in_file","args":{"path":"main.py","
 
 ### run_cmd
 Execute a shell command (requires user approval).
-Arguments: { "cmd": "<command>", "cwd": "<optional working directory>" }
-Example: {"type":"tool_call","tool":"run_cmd","args":{"cmd":"python main.py"}}
+Arguments: { "cmd": "<command>", "cwd": "<optional relative path>" }
+- **cwd** is RELATIVE to project root. Use "." for project root, or subdirectory names like "datapub".
+- **NEVER** use absolute paths like "/home/..." or "/".
+Example: {"type":"tool_call","tool":"run_cmd","args":{"cmd":"python main.py","cwd":"."}}
 
 ### mark_todo_done
 Mark a todo item as completed when you finish it.

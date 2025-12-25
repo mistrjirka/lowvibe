@@ -4,7 +4,7 @@ import './PlanPanel.css';
 interface Todo {
     title: string;
     details: string;
-    status: 'pending' | 'done';
+    status: 'pending' | 'completed';
     acceptanceCriteria: string[];
 }
 
@@ -22,7 +22,7 @@ interface PlanPanelProps {
 export function PlanPanel({ plan, isExpanded, onToggle }: PlanPanelProps) {
     if (!plan) return null;
 
-    const completedCount = plan.todos.filter(t => t.status === 'done').length;
+    const completedCount = plan.todos.filter(t => t.status === 'completed').length;
     const totalCount = plan.todos.length;
 
     return (
@@ -49,7 +49,7 @@ export function PlanPanel({ plan, isExpanded, onToggle }: PlanPanelProps) {
                             <li key={i} className={`todo-item todo-${todo.status}`}>
                                 <div className="todo-header">
                                     <span className="todo-checkbox">
-                                        {todo.status === 'done' ? '✓' : '○'}
+                                        {todo.status === 'completed' ? '✓' : '○'}
                                     </span>
                                     <span className="todo-title">{todo.title}</span>
                                 </div>

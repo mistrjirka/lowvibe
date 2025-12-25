@@ -4,7 +4,10 @@ import { IPromptBuilder, ReasoningEffort } from './prompt.interface';
 export const SmartEditSchema = z.object({
     found: z.boolean().describe('Whether the code block was found in the file'),
     actualString: z.string().describe('The EXACT string from the file that matches the intent. Must include exact whitespace.'),
-    confidence: z.enum(['high', 'medium', 'low']).describe('Confidence in the match')
+    confidence: z.preprocess(
+        (val) => Array.isArray(val) ? val[0] : val,  // If LLM returns array, take first element
+        z.enum(['high', 'medium', 'low'])
+    ).describe('Confidence in the match')
 });
 
 export type SmartEditOutput = z.infer<typeof SmartEditSchema>;

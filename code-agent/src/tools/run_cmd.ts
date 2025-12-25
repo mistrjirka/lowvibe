@@ -44,11 +44,16 @@ function truncateLargeOutput(output: string, type: 'stdout' | 'stderr', repoRoot
 }
 
 export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exitCode: number; stdout: string; stderr: string; cwd: string; repoRoot: string; savedPaths?: { stdout?: string; stderr?: string }; error?: string }> {
-    const cwd = args.cwd ? path.resolve(repoRoot, args.cwd) : repoRoot;
+    // Normalize CWD: strip absolute paths, default to project root
+    let cwdArg = args.cwd || '.';
+    if (cwdArg.startsWith('/')) {
+        cwdArg = '.'; // Force to project root if absolute path detected
+    }
+    const cwd = path.resolve(repoRoot, cwdArg);
 
-    // Simple security check (imperfect, but basic)
+    // Security check: ensure CWD is within repoRoot
     if (!cwd.startsWith(path.resolve(repoRoot))) {
-        return { exitCode: -1, stdout: "", stderr: "", cwd, repoRoot, error: "Access denied: Cwd is outside repository root" };
+        return { exitCode: -1, stdout: "", stderr: "", cwd, repoRoot, error: "Access denied: CWD is outside repository root. Use relative paths like '.' or 'datapub'." };
     }
 
     return new Promise((resolve) => {

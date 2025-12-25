@@ -11,7 +11,7 @@ export const SupervisorSchema = z.object({
     debuggingTips: z.string().describe('Specific debugging suggestions if there are errors'),
     nextStepSuggestion: z.string().describe('What the agent should focus on next'),
     todosToComplete: z.array(z.number()).describe('1-based indices of todos that appear to be done and should be marked complete'),
-    confidence: z.string().describe('How confident the agent seems: low, medium, or high')
+    confidence: z.enum(['low', 'medium', 'high']).describe('How confident the agent seems: low, medium, or high')
 });
 
 export type SupervisorOutput = z.infer<typeof SupervisorSchema>;
@@ -68,8 +68,13 @@ These are MORE RELIABLE than replace_in_file.
 3. nextStepSuggestion: Directive for immediate next action.
 4. todosToComplete: Indices of DONE tasks.
 
+## CRITICAL TODO RULE
+- If you suggest moving to the next task, you **MUST** include the completed task's index in \`todosToComplete\`.
+- Do NOT mark a task done without EXPLICIT proof (e.g., successful run_cmd output).
+- Review the Todo List and proactively mark tasks as done if evidence shows completion.
+
 - **Premature Progression**: If the CURRENT task (e.g. input parsing) seems incomplete or unverified, DO NOT suggest solving the algorithm yet.
-- **Unverified Code**: If code was just written (via write_file/edit_function) but NOT run/tested, your advise MUST be: "Run the code to verify it works."
+- **UNVERIFIED CODE BLOCKER**: If the agent just wrote code (write_file, edit_function, add_function) but HAS NOT RUN IT via run_cmd, you CANNOT suggest new features. Your ONLY advice must be: "Run the code to verify it works first." Do NOT move forward until run_cmd confirms the code works.
 
 ## Focus
 - Focus heavily on the MOST RECENT tool output (usually the last run_cmd).

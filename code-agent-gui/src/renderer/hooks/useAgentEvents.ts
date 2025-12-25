@@ -26,7 +26,7 @@ export interface Plan {
     todos: {
         title: string;
         details: string;
-        status: 'pending' | 'done';
+        status: 'pending' | 'completed';
         acceptanceCriteria: string[];
     }[];
 }
