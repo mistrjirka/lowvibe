@@ -25,7 +25,11 @@ export function getFileOutline(repoRoot: string, args: GetFileOutlineArgs): File
 
     const language = detectLanguage(args.path);
     if (language === 'unknown') {
-        return { error: `Unsupported language for file: ${args.path}. Supported: Python (.py), C++ (.cpp, .cc, .c, .h)` };
+        return {
+            error: `Unsupported language for file: ${args.path}. ` +
+                `Supported: Python (.py), C++ (.cpp, .cc, .c, .h). ` +
+                `TIP: Use read_file("${args.path}") instead for non-code files like inputs, configs, or data.`
+        };
     }
 
     try {

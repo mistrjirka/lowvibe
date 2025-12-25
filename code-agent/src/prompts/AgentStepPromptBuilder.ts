@@ -291,10 +291,14 @@ Example: {"type":"tool_call","tool":"edit_range","args":{"path":"main.py","start
 - All tool arguments MUST be literal strings or numbers. Do NOT use JSON references ($ref), nested objects, or any complex types.
 - The "path" argument must always be a simple string like "main.py" or "src/utils.py"
 - Execute one step at a time
+- **NO INLINE CODE**: Do NOT use heredoc/inline code like \`python - <<'PY' ...\` or \`cat << 'EOF' > file.py\`. 
+  Instead, ALWAYS create a proper file with write_file and run it separately. This allows for easier iteration and debugging.
 
 ## EDITING FILES (IMPORTANT - USE AST TOOLS):
 - **PREFERRED**: For Python/C++ files, use get_file_outline first, then edit_function/add_function/remove_function.
   These are MUCH MORE RELIABLE than replace_in_file.
+- **NON-CODE FILES**: For input files (.in, .txt), configs, or data files, use read_file instead of get_file_outline.
+  AST tools only work on: Python (.py), C++ (.cpp, .cc, .c, .h)
 - **FALLBACK**: Only use replace_in_file if AST tools don't support the file type or for very simple edits.
 - **WORKFLOW FOR EDITS**:
   1. get_file_outline("file.py") → See all functions/classes with line numbers
@@ -315,9 +319,13 @@ Example: {"type":"tool_call","tool":"edit_range","args":{"path":"main.py","start
   - **LIMITS TIP**: For max/min values, use: \`std::numeric_limits<long long>::max()\` or \`std::numeric_limits<long long>::min()\`.
 - CRITICAL: If you used multiple temporary files, you MUST integrate them into the final requested file structure and verify the solution works before marking the task as complete.
 - When finishing, you MUST output a brief explanation of how to use your solution and how it works.
+- **FINALIZATION TIP**: If creating a "final" clean version, create a NEW file (e.g., \`solution_v2.py\`) and keep the old working version for reference. Do not overwrite unless sure.
 - ANTI-LOOP: If you see in the conversation history that you have tried the SAME approach multiple times and it keeps failing, you MUST try a FUNDAMENTALLY DIFFERENT approach. Do NOT repeat the same fix. Step back and reconsider your logic.
 - ANTI-LOOP: If the same error appears 2+ times, the problem is likely in your UNDERSTANDING of the problem, not just the code. Re-read the requirements.
 - ANTI-LOOP: If replace_in_file keeps failing, SWITCH to get_file_outline + edit_function.
+- **RUNTIME ERRORS**: If your program throws errors on one input, try it on OTHER inputs - some may work! Use: \`./program < input1.in; ./program < input2.in\`
+- **MULTIPLE COMMANDS**: You can run multiple commands in one run_cmd using semicolons: \`command1; command2; command3\`
+- **INPUT REDIRECTION**: For programs that read from stdin, use: \`python main.py < input.txt\` or \`./program < data.in\`
 - WORKFLOW: After EVERY tool call, you MUST output a "message" type explaining what happened and what you will do next. Only then can you make another tool call.
 
 ## TODO MANAGEMENT (IMPORTANT):

@@ -55,6 +55,14 @@ export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exit
         const [command, ...cmdArgs] = args.cmd.split(' ');
         const child = spawn(command, cmdArgs, { cwd, shell: true });
 
+        // Timeout after 20 seconds (likely waiting for stdin)
+        const TIMEOUT_MS = 20000;
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGKILL');
+        }, TIMEOUT_MS);
+
         // Handle Ctrl+C (SIGINT)
         const sigintHandler = () => {
             console.log('\n[CLI] Caught SIGINT. Terminating child process...');
@@ -74,11 +82,13 @@ export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exit
         });
 
         child.on('error', (err) => {
+            clearTimeout(timeoutId);
             process.off('SIGINT', sigintHandler);
             resolve({ exitCode: -1, stdout, stderr, cwd, repoRoot, error: err.message });
         });
 
         child.on('close', (code) => {
+            clearTimeout(timeoutId);
             process.off('SIGINT', sigintHandler);
 
             // Truncate large outputs
@@ -88,6 +98,21 @@ export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exit
             const savedPaths: { stdout?: string; stderr?: string } = {};
             if (stdoutResult.savedPath) savedPaths.stdout = stdoutResult.savedPath;
             if (stderrResult.savedPath) savedPaths.stderr = stderrResult.savedPath;
+
+            // Check if timed out
+            if (timedOut) {
+                resolve({
+                    exitCode: -1,
+                    stdout: stdoutResult.truncated,
+                    stderr: stderrResult.truncated,
+                    cwd,
+                    repoRoot,
+                    error: `TIMEOUT: Command timed out after ${TIMEOUT_MS / 1000}s. ` +
+                        `This usually means the program is waiting for input from stdin. ` +
+                        `TIP: Use input redirection like: python main.py < input.txt or ./program < input.in`
+                });
+                return;
+            }
 
             resolve({
                 exitCode: code ?? -1,

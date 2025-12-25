@@ -279,7 +279,14 @@ export class ExecutePlanNode implements Node<AgentState> {
                                 guidance += `\n✅ Marked todo #${todoIndex} "${state.plan.todos[idx].title}" as done.`;
                             }
                         }
-                        this.emit('plan:updated', { plan: state.plan });
+
+                        const completedCount = state.plan.todos.filter(t => t.status === 'completed').length;
+                        const totalCount = state.plan.todos.length;
+                        const percent = Math.round((completedCount / totalCount) * 100);
+                        context.logger(`[Progress] Todos: ${completedCount}/${totalCount} done (${percent}%)`);
+
+                        // Emit deep copy so React sees a new object reference
+                        this.emit('plan:updated', { plan: JSON.parse(JSON.stringify(state.plan)) });
                     }
 
                     messages.push({
