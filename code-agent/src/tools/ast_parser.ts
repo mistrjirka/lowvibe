@@ -248,3 +248,104 @@ export function findByName(outline: OutlineItem[], name: string): OutlineItem | 
     }
     return null;
 }
+
+/**
+ * Information about a function call
+ */
+export interface FunctionCallInfo {
+    /** Name of the called function */
+    calledFunction: string;
+    /** Qualified name of the calling context (e.g., ClassName.method or standalone function) */
+    callerContext: string;
+    /** Line number of the call */
+    line: number;
+}
+
+/**
+ * Find all function calls in a file
+ * Returns list of { calledFunction, callerContext, line }
+ */
+export function findFunctionCalls(content: string, language: 'python' | 'cpp'): FunctionCallInfo[] {
+    ensureTreeSitterLoaded();
+    const tree = parseFile(content, language);
+    const calls: FunctionCallInfo[] = [];
+
+    // Build a map of line -> enclosing function/method name
+    const outline = getOutline(content, language);
+    const lineToContext = buildLineToContextMap(outline);
+
+    function visit(node: any): void {
+        if (language === 'python' && node.type === 'call') {
+            const funcNode = node.childForFieldName('function');
+            let calledName = '';
+
+            if (funcNode?.type === 'identifier') {
+                calledName = funcNode.text;
+            } else if (funcNode?.type === 'attribute') {
+                // method call like obj.method()
+                const attrNode = funcNode.childForFieldName('attribute');
+                calledName = attrNode?.text || '';
+            }
+
+            if (calledName) {
+                const line = node.startPosition.row + 1;
+                calls.push({
+                    calledFunction: calledName,
+                    callerContext: lineToContext.get(line) || '<module>',
+                    line
+                });
+            }
+        } else if (language === 'cpp' && node.type === 'call_expression') {
+            const funcNode = node.childForFieldName('function');
+            let calledName = '';
+
+            if (funcNode?.type === 'identifier') {
+                calledName = funcNode.text;
+            } else if (funcNode?.type === 'field_expression') {
+                const fieldNode = funcNode.childForFieldName('field');
+                calledName = fieldNode?.text || '';
+            }
+
+            if (calledName) {
+                const line = node.startPosition.row + 1;
+                calls.push({
+                    calledFunction: calledName,
+                    callerContext: lineToContext.get(line) || '<global>',
+                    line
+                });
+            }
+        }
+
+        // Recurse
+        for (const child of node.children || []) {
+            visit(child);
+        }
+    }
+
+    visit(tree.rootNode);
+    return calls;
+}
+
+/**
+ * Build a map of line number -> enclosing function/class.method context
+ */
+function buildLineToContextMap(outline: OutlineItem[], prefix = ''): Map<number, string> {
+    const map = new Map<number, string>();
+
+    for (const item of outline) {
+        const qualifiedName = prefix ? `${prefix}.${item.name}` : item.name;
+
+        if (item.type === 'function' || item.type === 'method') {
+            for (let line = item.line; line <= item.endLine; line++) {
+                map.set(line, qualifiedName);
+            }
+        }
+
+        if (item.children) {
+            const childMap = buildLineToContextMap(item.children, item.type === 'class' ? item.name : qualifiedName);
+            childMap.forEach((v, k) => map.set(k, v));
+        }
+    }
+
+    return map;
+}

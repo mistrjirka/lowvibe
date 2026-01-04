@@ -42,6 +42,29 @@ function findContainingNode(items: import('./ast_parser').OutlineItem[], line: n
 }
 
 /**
+ * Extract the name of a function/class definition from code
+ */
+function extractDefinitionName(code: string, language: 'python' | 'cpp' | 'unknown'): string | null {
+    const firstLine = code.trim().split('\n')[0];
+
+    if (language === 'python') {
+        // Match: def function_name(... or class ClassName... or async def func_name(...
+        const match = firstLine.match(/^(?:async\s+)?(?:def|class)\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+        return match ? match[1] : null;
+    } else if (language === 'cpp') {
+        // Match: void function_name(... or class ClassName { or int main(...
+        // Also handle: ReturnType ClassName::method_name(...
+        const classMatch = firstLine.match(/^(?:class|struct)\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
+        if (classMatch) return classMatch[1];
+
+        const funcMatch = firstLine.match(/(?:\w+\s+)+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/);
+        return funcMatch ? funcMatch[1] : null;
+    }
+
+    return null;
+}
+
+/**
  * Add a new function/class at a specific line
  */
 export function addFunction(repoRoot: string, args: AddFunctionArgs): { success: boolean; message: string; diff?: string } | { error: string } {
@@ -66,6 +89,18 @@ export function addFunction(repoRoot: string, args: AddFunctionArgs): { success:
         if (language !== 'unknown') {
             try {
                 const outline = getOutline(content, language);
+
+                // DUPLICATE CHECK: Extract the name of the function/class being added
+                const newItemName = extractDefinitionName(args.code, language);
+                if (newItemName) {
+                    const existingItem = findByName(outline, newItemName);
+                    if (existingItem) {
+                        return {
+                            error: `Duplicate detected: A ${existingItem.type} named "${newItemName}" already exists at lines ${existingItem.line}-${existingItem.endLine}. Use edit_function to modify it instead.`
+                        };
+                    }
+                }
+
                 const containingNode = findContainingNode(outline, insertAtLine);
 
                 // If we are strictly inside a function/class/method (not just at the start/end boundaries)

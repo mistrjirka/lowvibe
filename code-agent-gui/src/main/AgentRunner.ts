@@ -19,6 +19,8 @@ export interface AgentConfig {
     maxContextHistory?: number;
     summarizationThreshold?: number;
     supervisorInterval?: number;
+    // Multi-agent mode
+    useMultiAgent?: boolean;
 }
 
 export class AgentRunner extends EventEmitter {
@@ -173,6 +175,61 @@ export class AgentRunner extends EventEmitter {
             } catch (e: any) {
                 // Continue with default context limit
             }
+
+            // =====================
+            // MULTI-AGENT MODE
+            // =====================
+            if (config.useMultiAgent) {
+                this.emit('pipeline:start', { name: 'MultiAgent', multiAgent: true });
+
+                const { LMStudioClient } = require(path.join(codeAgentPath, 'llm/LMStudioClient'));
+                const { MultiAgentOrchestrator } = require(path.join(codeAgentPath, 'orchestrator/MultiAgentOrchestrator'));
+
+                const client = new LMStudioClient(config.baseUrl, config.model);
+
+                const orchestrator = new MultiAgentOrchestrator({
+                    client,
+                    repoRoot: config.repoRoot,
+                    emitter: this,
+                    logger: (msg: string) => {
+                        this.emit('log', { message: msg, timestamp: Date.now() });
+                    },
+                    askUser: async (query: string, options?: any): Promise<string> => {
+                        if (this.isCancelled) {
+                            throw new Error('Agent cancelled');
+                        }
+                        this.emit('ask_user', { query, options });
+                        return new Promise((resolve, reject) => {
+                            this.pendingUserInput = (input: string) => {
+                                if (this.isCancelled) {
+                                    reject(new Error('Agent cancelled'));
+                                } else {
+                                    resolve(input);
+                                }
+                            };
+                        });
+                    },
+                    maxStepsPerAgent: 20
+                });
+
+                const result = await orchestrator.run(
+                    config.userTask,
+                    '', // todo list - will be managed internally
+                    [] // files - will be scanned internally
+                );
+
+                this.emit('pipeline:end', {
+                    name: 'MultiAgent',
+                    success: result.success,
+                    message: result.message
+                });
+
+                return;
+            }
+
+            // =====================
+            // SINGLE-AGENT MODE (existing)
+            // =====================
             // Dynamically import the code-agent modules
             const { Pipeline } = require(path.join(codeAgentPath, 'pipeline/Pipeline'));
             const { ScanWorkspaceNode } = require(path.join(codeAgentPath, 'nodes/ScanWorkspaceNode'));

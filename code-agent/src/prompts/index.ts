@@ -5,3 +5,7 @@ export * from './AgentStepPromptBuilder';
 export * from './VerifyCommandPromptBuilder';
 export * from './SupervisorPromptBuilder';
 export * from './SmartEditPromptBuilder';
+export * from './ThinkerPromptBuilder';
+export * from './ImplementerPromptBuilder';
+export * from './TesterPromptBuilder';
+export * from './FinisherPromptBuilder';

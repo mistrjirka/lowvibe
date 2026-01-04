@@ -11,7 +11,7 @@ export interface AgentMessage {
     args?: any;
     result?: any;
     diff?: string;
-    stepCount?: number;  // For matching tool calls with results
+    stepCount?: number;
 }
 
 export interface AgentConfig {
@@ -20,6 +20,7 @@ export interface AgentConfig {
     model: string;
     baseUrl: string;
     allowedCommands?: string[];
+    useMultiAgent?: boolean;  // NEW: Toggle between single and multi-agent mode
 }
 
 export interface Plan {
@@ -53,9 +54,27 @@ export interface TokenUsage {
 export interface TokenUsageState {
     step: TokenUsage | null;
     cumulative: TokenUsage;
-    currentPromptTokens: number;  // Current message size in tokens
+    currentPromptTokens: number;
     contextLimit: number;
-    contextMessages?: Array<{ role: string; contentPreview?: string }>;  // Messages for viewer
+    contextMessages?: Array<{ role: string; contentPreview?: string }>;
+}
+
+// NEW: Multi-agent specific types
+export interface ImplementTask {
+    type: 'create_file' | 'edit_file' | 'delete_file';
+    task_description: string;
+    code: string;
+    file: string;
+}
+
+export interface MultiAgentState {
+    mode: 'single' | 'multi';
+    activeAgent: 'thinker' | 'implementer' | 'tester' | 'finisher' | null;
+    thinkerMessages: AgentMessage[];
+    implementerMessages: AgentMessage[];
+    testerMessages: AgentMessage[];
+    currentTask: { index: number; total: number; task: ImplementTask } | null;
+    finisherFeedback: string | null;
 }
 
 interface UseAgentEventsReturn {
@@ -70,6 +89,7 @@ interface UseAgentEventsReturn {
     pendingCommand: CommandApproval | null;
     fileDiffs: FileDiff[];
     tokenUsage: TokenUsageState | null;
+    multiAgent: MultiAgentState;  // NEW
     startAgent: (config: AgentConfig) => Promise<void>;
     sendUserInput: (input: string) => void;
     pauseAgent: () => void;
@@ -92,23 +112,29 @@ export function useAgentEvents(): UseAgentEventsReturn {
     const [fileDiffs, setFileDiffs] = useState<FileDiff[]>([]);
     const [tokenUsage, setTokenUsage] = useState<TokenUsageState | null>(null);
 
+    // NEW: Multi-agent state
+    const [multiAgent, setMultiAgent] = useState<MultiAgentState>({
+        mode: 'single',
+        activeAgent: null,
+        thinkerMessages: [],
+        implementerMessages: [],
+        testerMessages: [],
+        currentTask: null,
+        finisherFeedback: null
+    });
 
-    // Generate unique ID
     const genId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Truncate text for summary
     const truncate = (text: string, maxLen: number = 80): string => {
         if (text.length <= maxLen) return text;
         return text.substring(0, maxLen) + '...';
     };
 
     useEffect(() => {
-        // Get initial pipeline structure
         window.electronAPI.getPipelineStructure().then((structure) => {
             setPipelineNodes(structure.nodes);
         });
 
-        // Subscribe to agent events
         const unsubscribe = window.electronAPI.onAgentEvent((event) => {
             const { type, data } = event;
 
@@ -122,6 +148,17 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     setPlan(null);
                     setFileDiffs([]);
                     setTokenUsage(null);
+                    // Reset multi-agent state
+                    setMultiAgent(prev => ({
+                        ...prev,
+                        mode: data.multiAgent ? 'multi' : 'single',
+                        activeAgent: null,
+                        thinkerMessages: [],
+                        implementerMessages: [],
+                        testerMessages: [],
+                        currentTask: null,
+                        finisherFeedback: null
+                    }));
                     if (data.nodes) {
                         setPipelineNodes(data.nodes);
                     }
@@ -131,6 +168,7 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     setIsRunning(false);
                     setIsPaused(false);
                     setCurrentNode(null);
+                    setMultiAgent(prev => ({ ...prev, activeAgent: null }));
                     break;
 
                 case 'pipeline:error':
@@ -166,12 +204,144 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     setPlan(data.plan);
                     break;
 
+                // === MULTI-AGENT EVENTS ===
+                case 'orchestrator:start':
+                    setMultiAgent(prev => ({
+                        ...prev,
+                        mode: 'multi',
+                        thinkerMessages: [],
+                        implementerMessages: [],
+                        testerMessages: [],
+                        currentTask: null,
+                        finisherFeedback: null
+                    }));
+                    break;
+
+                case 'thinker:step':
+                    setMultiAgent(prev => {
+                        const newMsg: AgentMessage = {
+                            id: genId(),
+                            type: data.response.type === 'message' ? 'message' :
+                                data.response.type === 'tool_call' ? 'tool_call' :
+                                    data.response.type === 'implement' ? 'message' : 'log',
+                            summary: data.response.type === 'message' ? truncate(data.response.text) :
+                                data.response.type === 'tool_call' ? `${data.response.tool}(...)` :
+                                    data.response.type === 'implement' ? `Dispatching ${data.response.payload.tasks.length} tasks` :
+                                        'Step',
+                            content: JSON.stringify(data.response, null, 2),
+                            nodeName: 'Thinker',
+                            timestamp: new Date()
+                        };
+                        return {
+                            ...prev,
+                            activeAgent: 'thinker',
+                            thinkerMessages: [...prev.thinkerMessages, newMsg]
+                        };
+                    });
+                    break;
+
+                case 'implementer:step':
+                    setMultiAgent(prev => {
+                        const newMsg: AgentMessage = {
+                            id: genId(),
+                            type: data.response.type === 'message' ? 'message' :
+                                data.response.type === 'tool_call' ? 'tool_call' :
+                                    data.response.type === 'done' ? 'final' :
+                                        data.response.type === 'error' ? 'error' : 'log',
+                            summary: data.response.type === 'message' ? truncate(data.response.text) :
+                                data.response.type === 'tool_call' ? `${data.response.tool}(...)` :
+                                    data.response.type === 'done' ? `Done: ${truncate(data.response.summary)}` :
+                                        data.response.type === 'error' ? `Error: ${truncate(data.response.reason)}` : 'Step',
+                            content: JSON.stringify(data.response, null, 2),
+                            nodeName: 'Implementer',
+                            timestamp: new Date()
+                        };
+                        return {
+                            ...prev,
+                            activeAgent: 'implementer',
+                            implementerMessages: [...prev.implementerMessages, newMsg]
+                        };
+                    });
+                    break;
+
+                case 'implementer:task_start':
+                    setMultiAgent(prev => ({
+                        ...prev,
+                        currentTask: {
+                            index: data.index,
+                            total: data.total,
+                            task: data.task
+                        },
+                        implementerMessages: []  // Clear for new task
+                    }));
+                    break;
+
+                case 'tester:step':
+                    setMultiAgent(prev => {
+                        const newMsg: AgentMessage = {
+                            id: genId(),
+                            type: data.response.type === 'message' ? 'message' :
+                                data.response.type === 'tool_call' ? 'tool_call' :
+                                    data.response.type === 'result' ? 'final' : 'log',
+                            summary: data.response.type === 'message' ? truncate(data.response.text) :
+                                data.response.type === 'tool_call' ? `${data.response.tool}(...)` :
+                                    data.response.type === 'result' ?
+                                        (data.response.payload.successfully_implemented ? '✓ Success' : '✗ Failed') : 'Step',
+                            content: JSON.stringify(data.response, null, 2),
+                            nodeName: 'Tester',
+                            timestamp: new Date()
+                        };
+                        return {
+                            ...prev,
+                            activeAgent: 'tester',
+                            testerMessages: [...prev.testerMessages, newMsg]
+                        };
+                    });
+                    break;
+
+                case 'finisher:feedback':
+                    setMultiAgent(prev => {
+                        // Add finisher feedback to thinker messages
+                        const feedbackMsg: AgentMessage = {
+                            id: genId(),
+                            type: 'message',
+                            summary: `Finisher: ${truncate(data.overall)}`,
+                            content: data.overall,
+                            nodeName: 'Finisher',
+                            timestamp: new Date()
+                        };
+                        return {
+                            ...prev,
+                            activeAgent: 'thinker',  // Return to thinker
+                            finisherFeedback: data.overall,
+                            thinkerMessages: [...prev.thinkerMessages, feedbackMsg],
+                            testerMessages: []  // Clear tester for next round
+                        };
+                    });
+                    break;
+
+                case 'thinker:final':
+                    setMultiAgent(prev => {
+                        const finalMsg: AgentMessage = {
+                            id: genId(),
+                            type: 'final',
+                            summary: `✓ ${data.criteriaStatus}: ${truncate(data.text)}`,
+                            content: data.text,
+                            nodeName: 'Thinker',
+                            timestamp: new Date()
+                        };
+                        return {
+                            ...prev,
+                            thinkerMessages: [...prev.thinkerMessages, finalMsg]
+                        };
+                    });
+                    break;
+                // === END MULTI-AGENT EVENTS ===
+
                 case 'agent:message':
-                    // Suppress "[Agent Step X]" logs as they clutter the UI
                     if (data.text.startsWith('\n[Agent Step') || data.text.startsWith('[Agent Step')) {
                         return;
                     }
-
                     setMessages(prev => [...prev, {
                         id: genId(),
                         type: 'message',
@@ -199,7 +369,6 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     break;
 
                 case 'agent:tool_result':
-                    // Check if result has a diff
                     const resultDiff = data.result?.diff;
                     if (resultDiff && data.args?.path) {
                         setFileDiffs(prev => [...prev, {
@@ -209,9 +378,7 @@ export function useAgentEvents(): UseAgentEventsReturn {
                         }]);
                     }
 
-                    // Update the matching tool_call message by stepCount
                     setMessages(prev => {
-                        // Find the tool_call with matching stepCount and tool name
                         const matchIndex = prev.findIndex(
                             msg => msg.type === 'tool_call' &&
                                 msg.stepCount === data.stepCount &&
@@ -219,7 +386,6 @@ export function useAgentEvents(): UseAgentEventsReturn {
                         );
 
                         if (matchIndex === -1) {
-                            // Fallback: no matching tool_call found, create standalone result
                             console.warn('[useAgentEvents] No matching tool_call for result:', data.stepCount, data.tool);
                             return [...prev, {
                                 id: genId(),
@@ -235,7 +401,6 @@ export function useAgentEvents(): UseAgentEventsReturn {
                             }];
                         }
 
-                        // Update the matching tool_call message in place
                         const updated = [...prev];
                         const msg = updated[matchIndex];
                         const success = data.result?.success !== false && !data.result?.error;
@@ -286,7 +451,6 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     break;
 
                 case 'agent:context_summarized':
-                    // Update token usage with messages for viewer
                     setTokenUsage(prev => prev ? {
                         ...prev,
                         contextMessages: data.messages
@@ -294,7 +458,6 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     break;
 
                 case 'log':
-                    // Suppress redundant tool logs that are already shown as tool cards
                     if (data.message.startsWith('[Agent Tool]')) {
                         return;
                     }
@@ -309,7 +472,6 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     break;
 
                 case 'ask_user':
-                    // Check if this is a command approval (has command info)
                     if (data.options?.command) {
                         setPendingCommand({
                             command: data.options.command,
@@ -368,7 +530,6 @@ export function useAgentEvents(): UseAgentEventsReturn {
         setPendingQuery(null);
         setPendingCommand(null);
 
-        // Add user message to chat
         setMessages(prev => [...prev, {
             id: genId(),
             type: 'user',
@@ -430,6 +591,7 @@ export function useAgentEvents(): UseAgentEventsReturn {
         pendingCommand,
         fileDiffs,
         tokenUsage,
+        multiAgent,
         startAgent,
         sendUserInput,
         pauseAgent,

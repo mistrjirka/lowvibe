@@ -24,6 +24,7 @@ interface ChatPanelProps {
         maxContextHistory: number;
         summarizationThreshold: number;
         supervisorInterval: number;
+        useMultiAgent: boolean;
     };
     onConfigChange: (config: {
         repoRoot: string;
@@ -32,6 +33,7 @@ interface ChatPanelProps {
         maxContextHistory: number;
         summarizationThreshold: number;
         supervisorInterval: number;
+        useMultiAgent: boolean;
     }) => void;
     onStartAgent: (task: string) => void;
     onUserInput: (input: string) => void;
@@ -205,6 +207,21 @@ export function ChatPanel({
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    <div className="config-row" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>
+                        <label className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={config.useMultiAgent}
+                                onChange={(e) => onConfigChange({ ...config, useMultiAgent: e.target.checked })}
+                                style={{ width: '18px', height: '18px' }}
+                            />
+                            <span style={{ fontWeight: 500 }}>Multi-Agent Mode</span>
+                            <span style={{ fontSize: '0.8em', color: 'var(--text-secondary)' }}>
+                                (Thinker → Implementer → Tester pipeline)
+                            </span>
+                        </label>
                     </div>
                     <button
                         className="btn btn-secondary collapse-btn"
