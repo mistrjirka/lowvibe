@@ -14,7 +14,7 @@ export type ReadFunctionArgs = z.infer<typeof ReadFunctionSchema>;
  * Read a specific function/class by name
  */
 export function readFunction(repoRoot: string, args: ReadFunctionArgs): { content: string; line: number; endLine: number } | { error: string } {
-    const absolutePath = path.resolve(repoRoot, args.path);
+    const absolutePath = path.resolve(repoRoot, args.path.replace(/^[/\\]+/, ''));
 
     if (!absolutePath.startsWith(path.resolve(repoRoot))) {
         return { error: "Access denied: Path is outside repository root" };

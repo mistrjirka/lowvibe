@@ -1,12 +1,132 @@
 import { z } from 'zod';
 
 // ============================================================================
+// TOOL ARGUMENT SCHEMAS - each tool has explicit schema
+// ============================================================================
+
+// Thinker tools
+export const ThinkerReadFileSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('read_file'),
+    args: z.object({
+        path: z.string().describe('Path to the file to read'),
+        includeCallers: z.boolean().optional().describe('If true, find functions that call functions in this file')
+    })
+});
+
+export const ThinkerRunCmdSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('run_cmd'),
+    args: z.object({
+        cmd: z.string().describe('Shell command to execute'),
+        cwd: z.string().optional().describe('Working directory (relative to repo root)')
+    })
+});
+
+export const ThinkerManageTodosSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('manage_todos'),
+    args: z.object({
+        action: z.enum(['add', 'complete', 'update']),
+        todo: z.string()
+    })
+});
+
+// Implementer tools
+export const ImplAddFunctionSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('add_function'),
+    args: z.object({
+        path: z.string().describe('File path'),
+        function_code: z.string().describe('Complete function code'),
+        insert_after: z.string().optional().describe('Insert after this function name')
+    })
+});
+
+export const ImplEditFunctionSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('edit_function'),
+    args: z.object({
+        path: z.string().describe('File path'),
+        function_name: z.string().describe('Name of function to edit'),
+        new_code: z.string().describe('New function code')
+    })
+});
+
+export const ImplRemoveFunctionSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('remove_function'),
+    args: z.object({
+        path: z.string().describe('File path'),
+        function_name: z.string().describe('Name of function to remove')
+    })
+});
+
+export const ImplReadFileSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('read_file'),
+    args: z.object({
+        path: z.string().describe('File path')
+    })
+});
+
+export const ImplReadFunctionSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('read_function'),
+    args: z.object({
+        path: z.string().describe('File path'),
+        function_name: z.string().describe('Name of function to read')
+    })
+});
+
+export const ImplWriteFileSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('write_file'),
+    args: z.object({
+        path: z.string().describe('File path'),
+        content: z.string().describe('Complete file content to write')
+    })
+});
+
+export const ImplGetFileOutlineSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('get_file_outline'),
+    args: z.object({
+        path: z.string().describe('File path')
+    })
+});
+
+// Tester tools
+export const TesterRunCmdSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('run_cmd'),
+    args: z.object({
+        cmd: z.string().describe('Shell command to execute'),
+        cwd: z.string().optional().describe('Working directory')
+    })
+});
+
+export const TesterCreateFileSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('create_file'),
+    args: z.object({
+        path: z.string().describe('File path'),
+        content: z.string().describe('File content')
+    })
+});
+
+export const TesterReadFileSchema = z.object({
+    type: z.literal('tool_call'),
+    tool: z.literal('read_file'),
+    args: z.object({
+        path: z.string().describe('File path')
+    })
+});
+
+// ============================================================================
 // THINKER AGENT SCHEMAS
 // ============================================================================
 
-/**
- * Single implementation task within an implement call
- */
 export const ImplementTaskSchema = z.object({
     type: z.enum(['create_file', 'edit_file', 'delete_file']),
     task_description: z.string().describe('Goal of this task: what to implement, where to insert, which function to edit'),
@@ -16,29 +136,23 @@ export const ImplementTaskSchema = z.object({
 
 export type ImplementTask = z.infer<typeof ImplementTaskSchema>;
 
-/**
- * Implement tool call - Thinker uses this to dispatch work to Implementer
- */
 export const ImplementToolSchema = z.object({
     description: z.string().describe('What we are trying to achieve overall'),
-    tasks: z.array(ImplementTaskSchema).min(1).describe('List of file operations to perform')
+    tasks: z.array(ImplementTaskSchema).min(1).describe('List of file operations to perform'),
+    test_files: z.array(z.string()).optional().describe('List of test files that should be used for validation (e.g. .in files, .txt inputs)')
 });
 
 export type ImplementToolCall = z.infer<typeof ImplementToolSchema>;
 
-/**
- * Thinker can output: message, tool_call, or implement
- */
-export const ThinkerOutputSchema = z.discriminatedUnion('type', [
+// Use z.union instead of discriminatedUnion to allow multiple tool_call options
+export const ThinkerOutputSchema = z.union([
     z.object({
         type: z.literal('message'),
         text: z.string()
     }),
-    z.object({
-        type: z.literal('tool_call'),
-        tool: z.enum(['read_file', 'run_cmd', 'manage_todos']),
-        args: z.record(z.string(), z.any())
-    }),
+    ThinkerReadFileSchema,
+    ThinkerRunCmdSchema,
+    ThinkerManageTodosSchema,
     z.object({
         type: z.literal('implement'),
         payload: ImplementToolSchema
@@ -56,9 +170,6 @@ export type ThinkerOutput = z.infer<typeof ThinkerOutputSchema>;
 // IMPLEMENTER AGENT SCHEMAS
 // ============================================================================
 
-/**
- * Implementer done signal - task completed successfully
- */
 export const ImplementerDoneSchema = z.object({
     type: z.literal('done'),
     summary: z.string().describe('Brief summary of what was implemented')
@@ -66,9 +177,6 @@ export const ImplementerDoneSchema = z.object({
 
 export type ImplementerDone = z.infer<typeof ImplementerDoneSchema>;
 
-/**
- * Implementer error signal - task cannot be completed
- */
 export const ImplementerErrorSchema = z.object({
     type: z.literal('error'),
     reason: z.string().describe('Why the task is impossible: function not found, unclear instructions, etc.')
@@ -76,19 +184,18 @@ export const ImplementerErrorSchema = z.object({
 
 export type ImplementerError = z.infer<typeof ImplementerErrorSchema>;
 
-/**
- * Implementer can output: message, tool_call, done, or error
- */
-export const ImplementerOutputSchema = z.discriminatedUnion('type', [
+export const ImplementerOutputSchema = z.union([
     z.object({
         type: z.literal('message'),
         text: z.string()
     }),
-    z.object({
-        type: z.literal('tool_call'),
-        tool: z.enum(['add_function', 'edit_function', 'remove_function', 'read_file', 'read_function', 'write_file', 'get_file_outline']),
-        args: z.record(z.string(), z.any())
-    }),
+    ImplAddFunctionSchema,
+    ImplEditFunctionSchema,
+    ImplRemoveFunctionSchema,
+    ImplReadFileSchema,
+    ImplReadFunctionSchema,
+    ImplWriteFileSchema,
+    ImplGetFileOutlineSchema,
     ImplementerDoneSchema,
     ImplementerErrorSchema
 ]);
@@ -99,9 +206,6 @@ export type ImplementerOutput = z.infer<typeof ImplementerOutputSchema>;
 // TESTER AGENT SCHEMAS
 // ============================================================================
 
-/**
- * Test result from Tester agent
- */
 export const TestResultSchema = z.object({
     successfully_implemented: z.boolean(),
     successes: z.string().describe('What worked and which parts to keep - empty if failed'),
@@ -111,19 +215,14 @@ export const TestResultSchema = z.object({
 
 export type TestResult = z.infer<typeof TestResultSchema>;
 
-/**
- * Tester can output: message, tool_call, or result
- */
-export const TesterOutputSchema = z.discriminatedUnion('type', [
+export const TesterOutputSchema = z.union([
     z.object({
         type: z.literal('message'),
         text: z.string()
     }),
-    z.object({
-        type: z.literal('tool_call'),
-        tool: z.enum(['run_cmd', 'create_file', 'read_file']),
-        args: z.record(z.string(), z.any())
-    }),
+    TesterRunCmdSchema,
+    TesterCreateFileSchema,
+    TesterReadFileSchema,
     z.object({
         type: z.literal('result'),
         payload: TestResultSchema
@@ -133,56 +232,31 @@ export const TesterOutputSchema = z.discriminatedUnion('type', [
 export type TesterOutput = z.infer<typeof TesterOutputSchema>;
 
 // ============================================================================
-// FINISHER AGENT SCHEMAS
+// FINISHER AGENT SCHEMAS  
 // ============================================================================
 
-/**
- * Task result with test outcome - used in Finisher feedback
- */
-export const TaskResultSchema = z.object({
+export const TaskResultEntrySchema = z.object({
     task: ImplementTaskSchema,
     test_result: TestResultSchema
 });
 
-export type TaskResultEntry = z.infer<typeof TaskResultSchema>;
+export type TaskResultEntry = z.infer<typeof TaskResultEntrySchema>;
 
-/**
- * Finisher feedback - sent back to Thinker
- */
 export const FinisherFeedbackSchema = z.object({
-    overall: z.string().describe('Common error patterns, what is being done wrong, what to focus on'),
-    task_results: z.array(TaskResultSchema).describe('Pre-filled from Tester outputs')
+    overall: z.string().describe('Summary of all task results and overall assessment'),
+    task_results: z.array(TaskResultEntrySchema)
 });
 
 export type FinisherFeedback = z.infer<typeof FinisherFeedbackSchema>;
 
 // ============================================================================
-// CALLER INFO (for enhanced read_file)
+// COMMAND CORRECTOR SCHEMAS
 // ============================================================================
 
-/**
- * Information about a function caller
- */
-export const CallerInfoSchema = z.object({
-    file: z.string().describe('Path to the file containing the caller'),
-    functionName: z.string().describe('Qualified name: ClassName.method or standalone function'),
-    line: z.number().describe('Line number of the call')
+export const CommandCorrectionSchema = z.object({
+    corrected_cmd: z.string().describe('The corrected command string'),
+    corrected_cwd: z.string().optional().describe('The corrected relative working directory. If root, omit or use "."'),
+    reason: z.string().describe('Explanation of why correction was needed (e.g. "path fixed", "typo fixed", "verified correct")')
 });
 
-export type CallerInfo = z.infer<typeof CallerInfoSchema>;
-
-/**
- * Enhanced read_file result with caller information
- */
-export const EnhancedReadFileResultSchema = z.object({
-    content: z.string(),
-    outline: z.array(z.object({
-        name: z.string(),
-        type: z.enum(['function', 'class', 'method']),
-        startLine: z.number(),
-        endLine: z.number()
-    })),
-    callers: z.record(z.string(), z.array(CallerInfoSchema)).describe('Map of function name to list of callers')
-});
-
-export type EnhancedReadFileResult = z.infer<typeof EnhancedReadFileResultSchema>;
+export type CommandCorrection = z.infer<typeof CommandCorrectionSchema>;

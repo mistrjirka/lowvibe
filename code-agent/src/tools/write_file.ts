@@ -19,7 +19,9 @@ export interface WriteFileResult {
 }
 
 export function writeFile(repoRoot: string, args: WriteFileArgs): WriteFileResult {
-    const absolutePath = path.resolve(repoRoot, args.path);
+    // Normalize path to prevent absolute path traversal
+    const relativePath = args.path.replace(/^[/\\]+/, '');
+    const absolutePath = path.resolve(repoRoot, relativePath);
     if (!absolutePath.startsWith(path.resolve(repoRoot))) {
         return { success: false, error: "Access denied: Path is outside repository root" };
     }

@@ -33,7 +33,7 @@ export function App() {
         maxContextHistory: 10,
         summarizationThreshold: 0.65,
         supervisorInterval: 5,
-        useMultiAgent: false
+        useMultiAgent: true
     });
 
     const [viewingDiff, setViewingDiff] = useState<FileDiff | null>(null);

@@ -16,7 +16,7 @@ export type EditFunctionArgs = z.infer<typeof EditFunctionSchema>;
  * Edit a specific function/class by name
  */
 export function editFunction(repoRoot: string, args: EditFunctionArgs): { success: boolean; message: string; diff?: string } | { error: string } {
-    const absolutePath = path.resolve(repoRoot, args.path);
+    const absolutePath = path.resolve(repoRoot, args.path.replace(/^[/\\]+/, ''));
 
     if (!absolutePath.startsWith(path.resolve(repoRoot))) {
         return { error: "Access denied: Path is outside repository root" };

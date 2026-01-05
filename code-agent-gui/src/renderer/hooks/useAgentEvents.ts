@@ -219,18 +219,42 @@ export function useAgentEvents(): UseAgentEventsReturn {
 
                 case 'thinker:step':
                     setMultiAgent(prev => {
-                        const newMsg: AgentMessage = {
-                            id: genId(),
-                            type: data.response.type === 'message' ? 'message' :
+                        // Check if message for this step already exists (to prevent dupes)
+                        if (prev.thinkerMessages.some(m => m.stepCount === data.step)) {
+                            return prev;
+                        }
+
+                        let type: AgentMessage['type'] = 'log';
+                        let summary = 'Step';
+                        let content = '';
+
+                        if (data.response) {
+                            // Handle structured ThinkerOutput
+                            type = data.response.type === 'message' ? 'message' :
                                 data.response.type === 'tool_call' ? 'tool_call' :
-                                    data.response.type === 'implement' ? 'message' : 'log',
-                            summary: data.response.type === 'message' ? truncate(data.response.text) :
+                                    data.response.type === 'implement' ? 'message' : 'log';
+
+                            summary = data.response.type === 'message' ? truncate(data.response.text) :
                                 data.response.type === 'tool_call' ? `${data.response.tool}(...)` :
                                     data.response.type === 'implement' ? `Dispatching ${data.response.payload.tasks.length} tasks` :
-                                        'Step',
-                            content: JSON.stringify(data.response, null, 2),
+                                        'Step';
+
+                            content = JSON.stringify(data.response, null, 2);
+                        } else if (data.message) {
+                            // Handle standard message format
+                            type = 'message';
+                            summary = truncate(data.message.content);
+                            content = data.message.content;
+                        }
+
+                        const newMsg: AgentMessage = {
+                            id: genId(),
+                            type,
+                            summary,
+                            content,
                             nodeName: 'Thinker',
-                            timestamp: new Date()
+                            timestamp: new Date(),
+                            stepCount: data.step // Store step for matching result
                         };
                         return {
                             ...prev,
@@ -240,8 +264,38 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     });
                     break;
 
+                case 'thinker:tool_result':
+                    setMultiAgent(prev => {
+                        const updated = [...prev.thinkerMessages];
+                        // Find the existing tool_call message for this step
+                        const matchIndex = updated.findIndex(m => m.stepCount === data.step && m.type === 'tool_call');
+                        if (matchIndex !== -1) {
+                            updated[matchIndex] = {
+                                ...updated[matchIndex],
+                                summary: `${updated[matchIndex].summary} -> ${data.result.error ? 'Error' : 'Done'}`,
+                                content: updated[matchIndex].content + '\n\nResult:\n' + JSON.stringify(data.result, null, 2),
+                                result: data.result
+                            };
+                        } else {
+                            // If not found (unlikely), append new message
+                            updated.push({
+                                id: genId(),
+                                type: 'tool_result',
+                                summary: `Result: ${truncate(JSON.stringify(data.result), 40)}`,
+                                content: JSON.stringify(data.result, null, 2),
+                                nodeName: 'Thinker',
+                                timestamp: new Date(),
+                                result: data.result,
+                                stepCount: data.step
+                            });
+                        }
+                        return { ...prev, thinkerMessages: updated };
+                    });
+                    break;
+
                 case 'implementer:step':
                     setMultiAgent(prev => {
+                        if (prev.implementerMessages.some(m => m.stepCount === data.step)) return prev;
                         const newMsg: AgentMessage = {
                             id: genId(),
                             type: data.response.type === 'message' ? 'message' :
@@ -254,7 +308,8 @@ export function useAgentEvents(): UseAgentEventsReturn {
                                         data.response.type === 'error' ? `Error: ${truncate(data.response.reason)}` : 'Step',
                             content: JSON.stringify(data.response, null, 2),
                             nodeName: 'Implementer',
-                            timestamp: new Date()
+                            timestamp: new Date(),
+                            stepCount: data.step
                         };
                         return {
                             ...prev,
@@ -276,8 +331,36 @@ export function useAgentEvents(): UseAgentEventsReturn {
                     }));
                     break;
 
+                case 'implementer:tool_result':
+                    setMultiAgent(prev => {
+                        const updated = [...prev.implementerMessages];
+                        const matchIndex = updated.findIndex(m => m.stepCount === data.step && m.type === 'tool_call');
+                        if (matchIndex !== -1) {
+                            updated[matchIndex] = {
+                                ...updated[matchIndex],
+                                summary: `${updated[matchIndex].summary} -> ${data.result.error ? 'Error' : 'Done'}`,
+                                content: updated[matchIndex].content + '\n\nResult:\n' + JSON.stringify(data.result, null, 2),
+                                result: data.result
+                            };
+                        } else {
+                            updated.push({
+                                id: genId(),
+                                type: 'tool_result',
+                                summary: `Result: ${truncate(JSON.stringify(data.result), 40)}`,
+                                content: JSON.stringify(data.result, null, 2),
+                                nodeName: 'Implementer',
+                                timestamp: new Date(),
+                                result: data.result,
+                                stepCount: data.step
+                            });
+                        }
+                        return { ...prev, implementerMessages: updated };
+                    });
+                    break;
+
                 case 'tester:step':
                     setMultiAgent(prev => {
+                        if (prev.testerMessages.some(m => m.stepCount === data.step)) return prev;
                         const newMsg: AgentMessage = {
                             id: genId(),
                             type: data.response.type === 'message' ? 'message' :
@@ -289,13 +372,41 @@ export function useAgentEvents(): UseAgentEventsReturn {
                                         (data.response.payload.successfully_implemented ? '✓ Success' : '✗ Failed') : 'Step',
                             content: JSON.stringify(data.response, null, 2),
                             nodeName: 'Tester',
-                            timestamp: new Date()
+                            timestamp: new Date(),
+                            stepCount: data.step
                         };
                         return {
                             ...prev,
                             activeAgent: 'tester',
                             testerMessages: [...prev.testerMessages, newMsg]
                         };
+                    });
+                    break;
+
+                case 'tester:tool_result':
+                    setMultiAgent(prev => {
+                        const updated = [...prev.testerMessages];
+                        const matchIndex = updated.findIndex(m => m.stepCount === data.step && m.type === 'tool_call');
+                        if (matchIndex !== -1) {
+                            updated[matchIndex] = {
+                                ...updated[matchIndex],
+                                summary: `${updated[matchIndex].summary} -> ${data.result.error ? 'Error' : 'Done'}`,
+                                content: updated[matchIndex].content + '\n\nResult:\n' + JSON.stringify(data.result, null, 2),
+                                result: data.result
+                            };
+                        } else {
+                            updated.push({
+                                id: genId(),
+                                type: 'tool_result',
+                                summary: `Result: ${truncate(JSON.stringify(data.result), 40)}`,
+                                content: JSON.stringify(data.result, null, 2),
+                                nodeName: 'Tester',
+                                timestamp: new Date(),
+                                result: data.result,
+                                stepCount: data.step
+                            });
+                        }
+                        return { ...prev, testerMessages: updated };
                     });
                     break;
 

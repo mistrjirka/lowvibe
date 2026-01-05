@@ -6,12 +6,14 @@ import { ImplementerOutputSchema, ImplementTask } from '../schemas/AgentSchemas'
  * Variables for the Implementer agent prompt
  */
 export interface ImplementerVariables {
+    goal: string;  // The overall goal from planning
     overallDescription: string;
     currentTask: ImplementTask;
     taskIndex: number;
     totalTasks: number;
     fileOutline?: string;
     todoList: string;
+    testFiles?: string[];
 }
 
 /**
@@ -34,13 +36,48 @@ export class ImplementerPromptBuilder implements IPromptBuilder<ImplementerVaria
 You execute ONE file operation task given by the Thinker. Focus on precise, syntactic code manipulation.
 
 ## Available Tools
-- \`add_function\`: Add a new function/class at a specific line
-- \`edit_function\`: Edit an existing function/class by name
-- \`remove_function\`: Remove a function/class by name
-- \`read_file\`: Read file content
-- \`read_function\`: Read a specific function's code
-- \`write_file\`: Write new file content
-- \`get_file_outline\`: Get syntactic structure of a file
+
+### add_function
+Add a new function/class to a file.
+Arguments:
+- path (required): File path
+- function_code (required): Complete function/class code to add
+- insert_after (optional): Insert after this function name
+
+### edit_function  
+Edit an existing function/class by name.
+Arguments:
+- path (required): File path
+- function_name (required): Name of function to edit
+- new_code (required): New function code
+
+### remove_function
+Remove a function/class by name.
+Arguments:
+- path (required): File path
+- function_name (required): Name of function to remove
+
+### read_file
+Read file content.
+Arguments:
+- path (required): File path
+
+### read_function
+Read a specific function's code.
+Arguments:
+- path (required): File path
+- function_name (required): Name of function to read
+
+### write_file
+Write content to a file (creates or overwrites).
+Arguments:
+- path (required): File path
+- content (required): Complete file content to write
+
+### get_file_outline
+Get syntactic structure of a file.
+Arguments:
+- path (required): File path
 
 ## Rules
 1. Use AST-based tools (add_function, edit_function) over raw text manipulation
@@ -52,7 +89,7 @@ You execute ONE file operation task given by the Thinker. Focus on precise, synt
 ## Output Format
 Always output one of:
 - \`message\`: Explain your reasoning
-- \`tool_call\`: Use a tool
+- \`tool_call\`: { "type": "tool_call", "tool": "tool_name", "args": { ... } }
 - \`done\`: { "type": "done", "summary": "what was implemented" }
 - \`error\`: { "type": "error", "reason": "why task is impossible" }`;
     }
@@ -62,7 +99,14 @@ Always output one of:
             ? `\n## Current File Outline\n\`\`\`\n${variables.fileOutline}\n\`\`\``
             : '';
 
-        return `## Overall Goal
+        const testFilesSection = variables.testFiles && variables.testFiles.length > 0
+            ? `\n## Relevant Test Files\n${variables.testFiles.join('\n')}`
+            : '';
+
+        return `## Goal
+${variables.goal}
+
+## Task Description
 ${variables.overallDescription}
 
 ## Your Task (${variables.taskIndex}/${variables.totalTasks})
@@ -75,6 +119,7 @@ ${variables.overallDescription}
 ${variables.currentTask.code}
 \`\`\`
 ${outlineSection}
+${testFilesSection}
 
 ## Current TODO List
 ${variables.todoList}

@@ -180,12 +180,79 @@ export class AgentRunner extends EventEmitter {
             // MULTI-AGENT MODE
             // =====================
             if (config.useMultiAgent) {
-                this.emit('pipeline:start', { name: 'MultiAgent', multiAgent: true });
+                this.emit('pipeline:start', { name: 'MultiAgent', multiAgent: true, nodes: ['ScanWorkspace', 'SelectFiles', 'AttachFiles', 'ExtractPlan', 'MultiAgent'] });
 
+                // Run planning nodes first (same as single-agent mode)
+                const { Pipeline } = require(path.join(codeAgentPath, 'pipeline/Pipeline'));
+                const { ScanWorkspaceNode } = require(path.join(codeAgentPath, 'nodes/ScanWorkspaceNode'));
+                const { SelectFilesNode } = require(path.join(codeAgentPath, 'nodes/SelectFilesNode'));
+                const { AttachFilesNode } = require(path.join(codeAgentPath, 'nodes/AttachFilesNode'));
+                const { ExtractPlanNode } = require(path.join(codeAgentPath, 'nodes/ExtractPlanNode'));
                 const { LMStudioClient } = require(path.join(codeAgentPath, 'llm/LMStudioClient'));
                 const { MultiAgentOrchestrator } = require(path.join(codeAgentPath, 'orchestrator/MultiAgentOrchestrator'));
 
-                const client = new LMStudioClient(config.baseUrl, config.model);
+                // Build planning pipeline
+                const planPipeline = Pipeline.create('MultiAgentPlanning')
+                    .pipe(new ScanWorkspaceNode())
+                    .pipe(new SelectFilesNode())
+                    .pipe(new AttachFilesNode())
+                    .pipe(new ExtractPlanNode());
+
+                // Forward pipeline events
+                if (typeof planPipeline.on === 'function') {
+                    planPipeline.on('node:enter', (data: any) => this.emit('node:enter', data));
+                    planPipeline.on('node:exit', (data: any) => {
+                        if (data.nodeName === 'ExtractPlan' && data.state?.plan) {
+                            this.currentPlan = data.state.plan;
+                            this.emit('plan:extracted', { plan: this.currentPlan });
+                        }
+                        this.emit('node:exit', data);
+                    });
+                }
+
+                // Create pipeline context
+                const planContext = {
+                    logger: (msg: string) => {
+                        this.emit('log', { message: msg, timestamp: Date.now() });
+                    },
+                    askUser: async (query: string, options?: any): Promise<string> => {
+                        if (this.isCancelled) throw new Error('Agent cancelled');
+                        this.emit('ask_user', { query, options });
+                        return new Promise((resolve, reject) => {
+                            this.pendingUserInput = (input: string) => {
+                                if (this.isCancelled) reject(new Error('Agent cancelled'));
+                                else resolve(input);
+                            };
+                        });
+                    }
+                };
+
+                // Initial state for planning
+                const planState = {
+                    repoRoot: config.repoRoot,
+                    userTask: config.userTask,
+                    allFiles: [],
+                    selectedFiles: [],
+                    fileContents: new Map(),
+                    history: [],
+                    results: null,
+                    contextLimit,
+                    clientConfig: {
+                        baseUrl: config.baseUrl,
+                        model: config.model,
+                        verbose: config.verbose || false
+                    }
+                };
+
+                // Run planning pipeline
+                const planResult = await planPipeline.run(planState, planContext);
+
+                // Now run orchestrator with planned state
+                const client = new LMStudioClient({
+                    baseUrl: config.baseUrl,
+                    model: config.model,
+                    verbose: config.verbose || false
+                });
 
                 const orchestrator = new MultiAgentOrchestrator({
                     client,
@@ -194,29 +261,28 @@ export class AgentRunner extends EventEmitter {
                     logger: (msg: string) => {
                         this.emit('log', { message: msg, timestamp: Date.now() });
                     },
-                    askUser: async (query: string, options?: any): Promise<string> => {
-                        if (this.isCancelled) {
-                            throw new Error('Agent cancelled');
-                        }
-                        this.emit('ask_user', { query, options });
-                        return new Promise((resolve, reject) => {
-                            this.pendingUserInput = (input: string) => {
-                                if (this.isCancelled) {
-                                    reject(new Error('Agent cancelled'));
-                                } else {
-                                    resolve(input);
-                                }
-                            };
-                        });
-                    },
-                    maxStepsPerAgent: 20
+                    askUser: planContext.askUser,
+                    maxStepsPerAgent: 400
                 });
+
+                // Build todo list from plan
+                const todoList = planResult.plan?.todos
+                    ?.map((t: any, i: number) => `${i + 1}. ${t.title}: ${t.details}`)
+                    .join('\n') || '';
+
+                // Get goal from plan restatement
+                const goal = planResult.plan?.restatement || config.userTask;
+
+                this.emit('node:enter', { nodeName: 'MultiAgent' });
 
                 const result = await orchestrator.run(
                     config.userTask,
-                    '', // todo list - will be managed internally
-                    [] // files - will be scanned internally
+                    goal,
+                    todoList,
+                    planResult.selectedFiles || []
                 );
+
+                this.emit('node:exit', { nodeName: 'MultiAgent' });
 
                 this.emit('pipeline:end', {
                     name: 'MultiAgent',

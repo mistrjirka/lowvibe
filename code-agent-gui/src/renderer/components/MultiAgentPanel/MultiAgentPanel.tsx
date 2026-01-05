@@ -1,5 +1,36 @@
+import { useState } from 'react';
 import { AgentMessage, MultiAgentState, ImplementTask } from '../../hooks/useAgentEvents';
 import './MultiAgentPanel.css';
+
+interface MessageItemProps {
+    msg: AgentMessage;
+}
+
+function MessageItem({ msg }: MessageItemProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+        <div
+            className={`agent-message ${msg.type} ${isExpanded ? 'expanded' : ''}`}
+            onClick={() => setIsExpanded(!isExpanded)}
+        >
+            <div className="message-header">
+                <span className="message-type">{msg.type}</span>
+                <span className="message-time">
+                    {msg.timestamp.toLocaleTimeString()}
+                </span>
+                <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+            </div>
+            <div className="message-summary">{msg.summary}</div>
+
+            {isExpanded && (
+                <div className="message-details">
+                    <pre>{msg.content}</pre>
+                </div>
+            )}
+        </div>
+    );
+}
 
 interface AgentColumnProps {
     title: string;
@@ -27,15 +58,7 @@ function AgentColumn({ title, messages, isActive, currentTask }: AgentColumnProp
 
             <div className="agent-messages">
                 {messages.map(msg => (
-                    <div key={msg.id} className={`agent-message ${msg.type}`}>
-                        <div className="message-header">
-                            <span className="message-type">{msg.type}</span>
-                            <span className="message-time">
-                                {msg.timestamp.toLocaleTimeString()}
-                            </span>
-                        </div>
-                        <div className="message-summary">{msg.summary}</div>
-                    </div>
+                    <MessageItem key={msg.id} msg={msg} />
                 ))}
             </div>
         </div>

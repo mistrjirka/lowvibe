@@ -139,9 +139,8 @@ Consider using language-specific profiling tools:
 export async function runCmd(repoRoot: string, args: RunCmdArgs): Promise<{ exitCode: number; stdout: string; stderr: string; cwd: string; repoRoot: string; savedPaths?: { stdout?: string; stderr?: string }; error?: string }> {
     // Normalize CWD: strip absolute paths, default to project root
     let cwdArg = args.cwd || '.';
-    if (cwdArg.startsWith('/')) {
-        cwdArg = '.'; // Force to project root if absolute path detected
-    }
+    // Strip leading separators to force relative path behavior
+    cwdArg = cwdArg.replace(/^[/\\]+/, '');
     const cwd = path.resolve(repoRoot, cwdArg);
 
     // Security check: ensure CWD is within repoRoot

@@ -68,7 +68,7 @@ function extractDefinitionName(code: string, language: 'python' | 'cpp' | 'unkno
  * Add a new function/class at a specific line
  */
 export function addFunction(repoRoot: string, args: AddFunctionArgs): { success: boolean; message: string; diff?: string } | { error: string } {
-    const absolutePath = path.resolve(repoRoot, args.path);
+    const absolutePath = path.resolve(repoRoot, args.path.replace(/^[/\\]+/, ''));
 
     if (!absolutePath.startsWith(path.resolve(repoRoot))) {
         return { error: "Access denied: Path is outside repository root" };
@@ -149,7 +149,7 @@ export function addFunction(repoRoot: string, args: AddFunctionArgs): { success:
  * Remove a function/class by name
  */
 export function removeFunction(repoRoot: string, args: RemoveFunctionArgs): { success: boolean; message: string; linesRemoved: number; diff?: string } | { error: string } {
-    const absolutePath = path.resolve(repoRoot, args.path);
+    const absolutePath = path.resolve(repoRoot, args.path.replace(/^[/\\]+/, ''));
 
     if (!absolutePath.startsWith(path.resolve(repoRoot))) {
         return { error: "Access denied: Path is outside repository root" };

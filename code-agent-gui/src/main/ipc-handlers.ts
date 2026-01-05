@@ -103,7 +103,18 @@ export function setupIpcHandlers(mainWindow: BrowserWindow, agentRunner: AgentRu
         'permission:exact_added',
         'log',
         'ask_user',
-        'error'
+        'error',
+        // Multi-agent events
+        'orchestrator:start',
+        'thinker:step',
+        'thinker:final',
+        'thinker:tool_result',
+        'implementer:step',
+        'implementer:task_start',
+        'implementer:tool_result',
+        'tester:step',
+        'tester:tool_result',
+        'finisher:feedback'
     ];
 
     for (const event of events) {
